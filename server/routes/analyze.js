@@ -8,6 +8,7 @@ import { extractText } from '../services/documentExtractor.js';
 import { analyzeCaseProfile } from '../services/caseAnalyzer.js';
 import { generatePreparation } from '../services/deductiveEngine.js';
 import { filterTerminology } from '../services/termFilter.js';
+import { decryptApiKey } from '../services/crypto.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const uploadDir = join(__dirname, '..', '..', 'uploads');
@@ -67,10 +68,13 @@ export default function analyzeRoutes(db) {
         });
       }
 
-      // Get API key from client header or fallback to env
-      const apiKey = req.headers['x-api-key'] || process.env.ANTHROPIC_API_KEY;
+      // Get API key from user's encrypted storage or fallback to env
+      const userRow = db.prepare('SELECT api_key_encrypted, api_key_iv, api_key_tag FROM users WHERE id = ?').get(req.user.id);
+      const apiKey = (userRow?.api_key_encrypted)
+        ? decryptApiKey(userRow.api_key_encrypted, userRow.api_key_iv, userRow.api_key_tag)
+        : process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
-        return res.status(401).json({ error: 'No API key provided. Please set your Anthropic API key in Settings.' });
+        return res.status(400).json({ error: 'No API key set. Please add your Anthropic API key in Settings.' });
       }
 
       // Step 2: Case profile detection
@@ -92,8 +96,8 @@ export default function analyzeRoutes(db) {
       }));
 
       db.prepare(`
-        INSERT INTO cases (id, name, case_type, case_subtype, profile_json, analysis_json, documents_meta)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO cases (id, name, case_type, case_subtype, profile_json, analysis_json, documents_meta, user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         caseId,
         caseName,
@@ -101,7 +105,8 @@ export default function analyzeRoutes(db) {
         caseProfile.case_subtype,
         JSON.stringify(caseProfile),
         JSON.stringify(preparation),
-        JSON.stringify(docsMeta)
+        JSON.stringify(docsMeta),
+        req.user.id
       );
 
       res.json({

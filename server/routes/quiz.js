@@ -1,5 +1,12 @@
 import { Router } from 'express';
 import { generateQuiz, generateSightPassage } from '../services/quizGenerator.js';
+import { decryptApiKey } from '../services/crypto.js';
+
+function getUserApiKey(db, userId) {
+  const user = db.prepare('SELECT api_key_encrypted, api_key_iv, api_key_tag FROM users WHERE id = ?').get(userId);
+  if (user?.api_key_encrypted) return decryptApiKey(user.api_key_encrypted, user.api_key_iv, user.api_key_tag);
+  return process.env.ANTHROPIC_API_KEY || null;
+}
 
 export default function quizRoutes(db) {
   const router = Router();
@@ -7,11 +14,11 @@ export default function quizRoutes(db) {
   // Generate MCQ quiz from case terminology
   router.post('/mcq/:caseId', async (req, res) => {
     try {
-      const row = db.prepare('SELECT analysis_json FROM cases WHERE id = ?').get(req.params.caseId);
+      const row = db.prepare('SELECT analysis_json FROM cases WHERE id = ? AND user_id = ?').get(req.params.caseId, req.user.id);
       if (!row) return res.status(404).json({ error: 'Case not found' });
 
-      const apiKey = req.headers['x-api-key'] || process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) return res.status(401).json({ error: 'No API key provided.' });
+      const apiKey = getUserApiKey(db, req.user.id);
+      if (!apiKey) return res.status(400).json({ error: 'No API key set. Please add your key in Settings.' });
 
       const analysis = JSON.parse(row.analysis_json);
       const quiz = await generateQuiz(analysis.terminology || [], apiKey);
@@ -25,11 +32,11 @@ export default function quizRoutes(db) {
   // Generate sight translation passage
   router.post('/sight/:caseId', async (req, res) => {
     try {
-      const row = db.prepare('SELECT analysis_json, profile_json FROM cases WHERE id = ?').get(req.params.caseId);
+      const row = db.prepare('SELECT analysis_json, profile_json FROM cases WHERE id = ? AND user_id = ?').get(req.params.caseId, req.user.id);
       if (!row) return res.status(404).json({ error: 'Case not found' });
 
-      const apiKey = req.headers['x-api-key'] || process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) return res.status(401).json({ error: 'No API key provided.' });
+      const apiKey = getUserApiKey(db, req.user.id);
+      if (!apiKey) return res.status(400).json({ error: 'No API key set. Please add your key in Settings.' });
 
       const analysis = JSON.parse(row.analysis_json);
       const profile = JSON.parse(row.profile_json);
@@ -45,16 +52,16 @@ export default function quizRoutes(db) {
   router.post('/score', (req, res) => {
     const { caseId, mode, score, total, details } = req.body;
     db.prepare(
-      'INSERT INTO quiz_scores (case_id, mode, score, total, details) VALUES (?, ?, ?, ?, ?)'
-    ).run(caseId, mode, score, total, JSON.stringify(details || {}));
+      'INSERT INTO quiz_scores (case_id, mode, score, total, details, user_id) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(caseId, mode, score, total, JSON.stringify(details || {}), req.user.id);
     res.json({ ok: true });
   });
 
   // Get quiz history for a case
   router.get('/scores/:caseId', (req, res) => {
     const scores = db.prepare(
-      'SELECT * FROM quiz_scores WHERE case_id = ? ORDER BY created_at DESC'
-    ).all(req.params.caseId);
+      'SELECT * FROM quiz_scores WHERE case_id = ? AND user_id = ? ORDER BY created_at DESC'
+    ).all(req.params.caseId, req.user.id);
     res.json(scores);
   });
 

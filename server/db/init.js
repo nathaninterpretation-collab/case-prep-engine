@@ -5,6 +5,17 @@ export function initDb(dbPath) {
   db.pragma('journal_mode = WAL');
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      api_key_encrypted TEXT,
+      api_key_iv TEXT,
+      api_key_tag TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS cases (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -28,6 +39,10 @@ export function initDb(dbPath) {
       FOREIGN KEY (case_id) REFERENCES cases(id)
     );
   `);
+
+  // Add user_id columns if missing (migration for existing DBs)
+  try { db.exec('ALTER TABLE cases ADD COLUMN user_id TEXT REFERENCES users(id)'); } catch {}
+  try { db.exec('ALTER TABLE quiz_scores ADD COLUMN user_id TEXT REFERENCES users(id)'); } catch {}
 
   return db;
 }

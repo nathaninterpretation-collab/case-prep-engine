@@ -7,7 +7,25 @@
   <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
-  <div id="app">
+  <!-- Auth Screen -->
+  <div id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <h2 class="auth-logo">CPE</h2>
+      <p class="auth-subtitle">Case Prep Engine</p>
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-auth="login">Login</button>
+        <button class="auth-tab" data-auth="register">Register</button>
+      </div>
+      <form id="auth-form">
+        <input type="email" id="auth-email" placeholder="Email" required class="modal-input">
+        <input type="password" id="auth-password" placeholder="Password (min 8 chars)" required class="modal-input">
+        <div id="auth-error" class="auth-error"></div>
+        <button type="submit" id="auth-submit" class="btn-primary btn-xl" style="width:100%">Login</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="app" style="display:none">
     <!-- Sidebar -->
     <aside id="sidebar">
       <div class="sidebar-header">
@@ -16,6 +34,10 @@
       </div>
       <button id="new-case-btn" class="btn-primary">+ New Case</button>
       <div id="case-list" class="case-list"></div>
+      <div class="sidebar-footer">
+        <div id="user-email" class="user-email"></div>
+        <button id="logout-btn" class="btn-ghost btn-small">Logout</button>
+      </div>
     </aside>
 
     <!-- Main content -->
@@ -47,7 +69,7 @@
             <button id="api-key-close" class="modal-close">&times;</button>
           </div>
           <div class="modal-body">
-            <p class="modal-desc">Enter your Anthropic API key to use the Case Prep Engine. Your key is stored locally in your browser and never sent to our servers.</p>
+            <p class="modal-desc">Enter your Anthropic API key to use the Case Prep Engine. Your key is encrypted and stored securely on the server.</p>
             <label for="api-key-input" class="modal-label">Anthropic API Key</label>
             <div class="api-key-field">
               <input type="password" id="api-key-input" placeholder="sk-ant-..." class="modal-input" autocomplete="off">

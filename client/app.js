@@ -7,24 +7,58 @@ const state = {
   uploadedFiles: [],
   quizState: null,
   activeTab: 'terminology',
-  mode: 'upload' // 'upload' | 'analysis'
+  mode: 'upload', // 'upload' | 'analysis'
+  user: null,
+  token: null
 };
 
 // ===== DOM REFS =====
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
-// ===== API KEY =====
-function getApiKey() { return localStorage.getItem('cpe_api_key') || ''; }
-function setApiKey(key) { localStorage.setItem('cpe_api_key', key); updateKeyStatus(); }
-function clearApiKey() { localStorage.removeItem('cpe_api_key'); updateKeyStatus(); }
+// ===== AUTH =====
+function getToken() { return localStorage.getItem('cpe_token'); }
+function setToken(t) { localStorage.setItem('cpe_token', t); state.token = t; }
+function clearToken() { localStorage.removeItem('cpe_token'); state.token = null; state.user = null; }
+
+function apiFetch(url, options = {}) {
+  const token = getToken();
+  if (!token && !url.startsWith('/api/auth/')) {
+    showAuthScreen();
+    return Promise.reject(new Error('Not authenticated'));
+  }
+  options.headers = { ...options.headers };
+  if (token) options.headers['Authorization'] = `Bearer ${token}`;
+  return fetch(url, options).then(res => {
+    if (res.status === 401 && !url.startsWith('/api/auth/')) {
+      clearToken();
+      showAuthScreen();
+      throw new Error('Session expired');
+    }
+    return res;
+  });
+}
+
+function showAuthScreen() {
+  $('#auth-screen').style.display = 'flex';
+  $('#app').style.display = 'none';
+}
+
+function showApp() {
+  $('#auth-screen').style.display = 'none';
+  $('#app').style.display = '';
+  if (state.user) {
+    $('#user-email').textContent = state.user.email;
+    updateKeyStatus();
+  }
+}
+
 function updateKeyStatus() {
   const el = $('#api-key-status');
   const btn = $('#api-key-btn');
   if (!el) return;
-  const key = getApiKey();
-  if (key) {
-    el.textContent = 'Key saved: ' + key.slice(0, 12) + '...';
+  if (state.user?.has_api_key) {
+    el.textContent = 'API key saved (encrypted)';
     el.className = 'api-key-status valid';
     if (btn) btn.style.color = 'var(--success)';
   } else {
@@ -35,11 +69,25 @@ function updateKeyStatus() {
 }
 
 // ===== INIT =====
-document.addEventListener('DOMContentLoaded', () => {
-  loadCases();
+document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
-  updateKeyStatus();
-  if (!getApiKey()) $('#api-key-modal').classList.remove('hidden');
+
+  const token = getToken();
+  if (token) {
+    try {
+      const res = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) {
+        const user = await res.json();
+        state.user = user;
+        state.token = token;
+        showApp();
+        loadCases();
+        return;
+      }
+    } catch {}
+    clearToken();
+  }
+  showAuthScreen();
 });
 
 function bindEvents() {
@@ -88,32 +136,92 @@ function bindEvents() {
   // Export PDF
   $('#export-pdf-btn').addEventListener('click', exportAllTabsPDF);
 
-  // API Key modal
+  // API Key modal (server-backed)
   $('#api-key-btn').addEventListener('click', () => {
-    $('#api-key-input').value = getApiKey();
+    $('#api-key-input').value = '';
+    updateKeyStatus();
     $('#api-key-modal').classList.remove('hidden');
   });
   $('#api-key-close').addEventListener('click', () => $('#api-key-modal').classList.add('hidden'));
   $('#api-key-modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) $('#api-key-modal').classList.add('hidden');
   });
-  $('#api-key-save').addEventListener('click', () => {
+  $('#api-key-save').addEventListener('click', async () => {
     const key = $('#api-key-input').value.trim();
-    if (key && key.startsWith('sk-')) {
-      setApiKey(key);
-      $('#api-key-modal').classList.add('hidden');
-    } else {
+    if (!key || !key.startsWith('sk-')) {
       $('#api-key-status').textContent = 'Invalid key format — should start with sk-';
       $('#api-key-status').className = 'api-key-status invalid';
+      return;
     }
+    try {
+      const res = await apiFetch('/api/auth/api-key', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: key })
+      });
+      if (res.ok) {
+        state.user.has_api_key = true;
+        updateKeyStatus();
+        $('#api-key-input').value = '';
+        $('#api-key-modal').classList.add('hidden');
+      }
+    } catch {}
   });
-  $('#api-key-clear').addEventListener('click', () => {
-    $('#api-key-input').value = '';
-    clearApiKey();
+  $('#api-key-clear').addEventListener('click', async () => {
+    try {
+      await apiFetch('/api/auth/api-key', { method: 'DELETE' });
+      state.user.has_api_key = false;
+      updateKeyStatus();
+      $('#api-key-input').value = '';
+    } catch {}
   });
   $('#api-key-toggle').addEventListener('click', () => {
     const inp = $('#api-key-input');
     inp.type = inp.type === 'password' ? 'text' : 'password';
+  });
+
+  // Auth
+  $$('.auth-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      $$('.auth-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const mode = tab.dataset.auth;
+      $('#auth-submit').textContent = mode === 'login' ? 'Login' : 'Create Account';
+      $('#auth-error').textContent = '';
+    });
+  });
+  $('#auth-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = $('#auth-email').value.trim();
+    const password = $('#auth-password').value;
+    const mode = $('.auth-tab.active').dataset.auth;
+    $('#auth-error').textContent = '';
+    $('#auth-submit').disabled = true;
+    try {
+      const res = await fetch(`/api/auth/${mode}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setToken(data.token);
+      state.user = data.user;
+      showApp();
+      loadCases();
+      if (!data.user.has_api_key) $('#api-key-modal').classList.remove('hidden');
+    } catch (err) {
+      $('#auth-error').textContent = err.message;
+    } finally {
+      $('#auth-submit').disabled = false;
+    }
+  });
+  $('#logout-btn').addEventListener('click', () => {
+    clearToken();
+    state.cases = [];
+    state.currentCaseId = null;
+    state.currentAnalysis = null;
+    showAuthScreen();
   });
 
   // Quiz
@@ -181,7 +289,7 @@ function renderFileList() {
 // ===== CASES =====
 async function loadCases() {
   try {
-    const res = await fetch('/api/cases');
+    const res = await apiFetch('/api/cases');
     state.cases = await res.json();
     renderCaseList();
   } catch (e) {
@@ -219,7 +327,7 @@ function newCase() {
 
 async function loadCase(id) {
   try {
-    const res = await fetch(`/api/cases/${id}`);
+    const res = await apiFetch(`/api/cases/${id}`);
     const data = await res.json();
     state.currentCaseId = data.id;
     state.currentProfile = data.profile;
@@ -260,7 +368,7 @@ async function runAnalysis() {
   const files = state.uploadedFiles;
   if (files.length === 0) return;
 
-  if (!getApiKey()) {
+  if (!state.user?.has_api_key) {
     $('#api-key-modal').classList.remove('hidden');
     return;
   }
@@ -298,10 +406,9 @@ async function runAnalysis() {
       }
     }, 2000);
 
-    const res = await fetch('/api/analyze', {
+    const res = await apiFetch('/api/analyze', {
       method: 'POST',
-      body: formData,
-      headers: { 'X-API-Key': getApiKey() }
+      body: formData
     });
 
     if (!res.ok) {
@@ -1231,10 +1338,7 @@ async function startMCQ() {
   $('#quiz-active').classList.remove('hidden');
 
   try {
-    const res = await fetch(`/api/quiz/mcq/${state.currentCaseId}`, {
-      method: 'POST',
-      headers: { 'X-API-Key': getApiKey() }
-    });
+    const res = await apiFetch(`/api/quiz/mcq/${state.currentCaseId}`, { method: 'POST' });
     const data = await res.json();
     if (!data.questions || data.questions.length === 0) {
       alert('No quiz questions available.');
@@ -1473,7 +1577,7 @@ function finishQuiz() {
   $('#quiz-breakdown').innerHTML = breakdownHtml;
 
   // Save
-  fetch('/api/quiz/score', {
+  apiFetch('/api/quiz/score', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -1503,10 +1607,7 @@ async function startSight() {
   $('#sight-result').classList.add('hidden');
 
   try {
-    const res = await fetch(`/api/quiz/sight/${state.currentCaseId}`, {
-      method: 'POST',
-      headers: { 'X-API-Key': getApiKey() }
-    });
+    const res = await apiFetch(`/api/quiz/sight/${state.currentCaseId}`, { method: 'POST' });
     const data = await res.json();
     state.sightData = data;
     $('#sight-passage').textContent = data.passage || 'No passage available.';

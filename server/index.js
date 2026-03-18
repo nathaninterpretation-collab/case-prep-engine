@@ -7,6 +7,8 @@ import { initDb } from './db/init.js';
 import analyzeRoutes from './routes/analyze.js';
 import casesRoutes from './routes/cases.js';
 import quizRoutes from './routes/quiz.js';
+import authRoutes from './routes/auth.js';
+import { requireAuth } from './middleware/auth.js';
 
 // Node v24: dotenv.config() may not populate process.env automatically
 const dotenvResult = dotenv.config();
@@ -30,9 +32,10 @@ app.use(express.static(join(__dirname, '..', 'client')));
 const db = initDb(join(__dirname, 'db', 'database.sqlite'));
 
 // Routes
-app.use('/api/analyze', analyzeRoutes(db));
-app.use('/api/cases', casesRoutes(db));
-app.use('/api/quiz', quizRoutes(db));
+app.use('/api/auth', authRoutes(db));
+app.use('/api/analyze', requireAuth, analyzeRoutes(db));
+app.use('/api/cases', requireAuth, casesRoutes(db));
+app.use('/api/quiz', requireAuth, quizRoutes(db));
 
 // SPA fallback
 app.get('*', (req, res) => {
