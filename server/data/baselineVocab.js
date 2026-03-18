@@ -1,0 +1,32 @@
+// Baseline legal vocabulary that every experienced court interpreter knows.
+// Terms in this set are SUPPRESSED from preparation materials (too easy).
+export const BASELINE_LEGAL_VOCABULARY = new Set([
+  'courtroom', 'court', 'judge', 'attorney', 'lawyer', 'counsel',
+  'plaintiff', 'defendant', 'petitioner', 'respondent',
+  'objection', 'sustained', 'overruled', 'sidebar',
+  'witness', 'testimony', 'testify', 'sworn', 'oath',
+  'evidence', 'exhibit', 'trial', 'hearing', 'motion',
+  'deposition', 'transcript', 'record', 'stipulate', 'stipulation',
+  'jury', 'verdict', 'sentence', 'sentencing',
+  'guilty', 'not guilty', 'innocent', 'plea',
+  'bail', 'bond', 'probation', 'parole',
+  'prosecution', 'defense', 'complaint', 'answer',
+  'discovery', 'interrogatory', 'subpoena',
+  'order', 'ruling', 'judgment', 'decree',
+  'appeal', 'appellant', 'appellee',
+  'tort', 'liability', 'damages', 'negligence',
+  'statute', 'regulation', 'code', 'law',
+  'arrest', 'charge', 'indictment', 'arraignment',
+  'cross-examination', 'direct examination', 'redirect',
+  'voir dire', 'empanelment',
+  'interpreter', 'translation', 'interpretation',
+  'swear', 'affirm', 'perjury',
+  'clerk', 'bailiff', 'marshal',
+  'sustain', 'overrule', 'strike', 'stricken',
+  'contempt', 'continuance', 'mistrial',
+  'recess', 'chambers', 'bench',
+  'counsel table', 'witness stand', 'gallery',
+  'docket', 'calendar', 'case number',
+  'file', 'filing', 'serve', 'service',
+  'summons', 'notice', 'brief', 'memorandum'
+]);

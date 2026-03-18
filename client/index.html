@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CPE — Case Prep Engine</title>
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <h2>CPE</h2>
+        <span class="subtitle">Case Prep Engine</span>
+      </div>
+      <button id="new-case-btn" class="btn-primary">+ New Case</button>
+      <div id="case-list" class="case-list"></div>
+    </aside>
+
+    <!-- Main content -->
+    <main id="main">
+      <!-- Top bar -->
+      <header id="topbar">
+        <div class="topbar-left">
+          <button id="sidebar-toggle" class="icon-btn" title="Toggle sidebar">&#9776;</button>
+          <h1 id="case-title">New Case</h1>
+        </div>
+        <div class="topbar-right">
+          <div id="topbar-upload" class="upload-zone" style="display:none;">
+            <input type="file" id="file-input-topbar" multiple accept=".pdf,.docx,.txt,.png,.jpg,.jpeg" hidden>
+            <button id="upload-btn-topbar" class="btn-small">+ Add Files</button>
+            <span id="file-count-topbar" class="file-count"></span>
+          </div>
+          <input type="text" id="case-name-input" placeholder="Case name..." class="case-name-input" style="display:none;">
+          <button id="analyze-btn" class="btn-primary" disabled style="display:none;">Analyze</button>
+          <button id="export-pdf-btn" class="btn-small" style="display:none;" title="Export all tabs as PDF">Export PDF</button>
+          <button id="api-key-btn" class="icon-btn" title="API Key Settings">&#128273;</button>
+        </div>
+      </header>
+
+      <!-- API Key Modal -->
+      <div id="api-key-modal" class="modal-overlay hidden">
+        <div class="modal">
+          <div class="modal-header">
+            <h3>API Key Settings</h3>
+            <button id="api-key-close" class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <p class="modal-desc">Enter your Anthropic API key to use the Case Prep Engine. Your key is stored locally in your browser and never sent to our servers.</p>
+            <label for="api-key-input" class="modal-label">Anthropic API Key</label>
+            <div class="api-key-field">
+              <input type="password" id="api-key-input" placeholder="sk-ant-..." class="modal-input" autocomplete="off">
+              <button id="api-key-toggle" class="icon-btn" title="Show/hide key">&#128065;</button>
+            </div>
+            <div id="api-key-status" class="api-key-status"></div>
+            <a href="https://console.anthropic.com/settings/keys" target="_blank" class="modal-link">Get an API key from Anthropic &rarr;</a>
+          </div>
+          <div class="modal-footer">
+            <button id="api-key-save" class="btn-primary">Save Key</button>
+            <button id="api-key-clear" class="btn-secondary">Clear Key</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress bar -->
+      <div id="progress-bar" class="progress-bar hidden">
+        <div class="progress-fill"></div>
+        <span class="progress-text">Ready</span>
+      </div>
+
+      <!-- Tab navigation -->
+      <nav id="tab-nav" class="tab-nav" style="display:none;">
+        <button class="tab-btn active" data-tab="terminology">TERMINOLOGY</button>
+        <button class="tab-btn" data-tab="context">CONTEXT</button>
+        <button class="tab-btn" data-tab="legal-theory">LEGAL THEORY</button>
+        <button class="tab-btn" data-tab="industry">INDUSTRY</button>
+        <button class="tab-btn" data-tab="hazards">HAZARDS</button>
+        <button class="tab-btn" data-tab="quiz">QUIZ</button>
+      </nav>
+
+      <!-- Tab content panels -->
+      <div id="tab-content" class="tab-content">
+
+        <!-- Upload Hero (front and center) -->
+        <div id="upload-hero" class="upload-hero">
+          <div id="upload-dropzone" class="upload-dropzone">
+            <input type="file" id="file-input" multiple accept=".pdf,.docx,.txt,.png,.jpg,.jpeg" hidden>
+            <span class="upload-icon">&#128203;</span>
+            <h2>Drop case documents here</h2>
+            <p>or click to browse</p>
+            <span class="formats">PDF, DOCX, TXT, images &mdash; up to 5 files</span>
+          </div>
+          <div id="upload-file-list" class="upload-file-list"></div>
+          <div id="upload-actions" class="upload-actions" style="display:none;">
+            <input type="text" id="upload-case-name" class="upload-case-name" placeholder="Name this case...">
+            <button id="upload-analyze-btn" class="btn-primary btn-xl">Analyze</button>
+          </div>
+        </div>
+
+        <!-- Tab 1: Terminology -->
+        <div id="tab-terminology" class="tab-panel hidden">
+          <div class="tab-toolbar">
+            <input type="text" id="term-search" placeholder="Search terms..." class="search-input">
+            <select id="term-domain-filter" class="filter-select">
+              <option value="">All domains</option>
+            </select>
+            <button id="term-export" class="btn-small">Export TSV</button>
+          </div>
+          <div id="term-table-wrapper" class="table-wrapper">
+            <table id="term-table" class="data-table">
+              <thead>
+                <tr>
+                  <th class="sortable" data-sort="en">English</th>
+                  <th class="sortable" data-sort="zh_simplified">&#31616;&#20307;</th>
+                  <th class="sortable" data-sort="zh_traditional">&#32321;&#39636;</th>
+                  <th>Pinyin</th>
+                  <th>Context</th>
+                  <th class="sortable" data-sort="difficulty">Diff</th>
+                </tr>
+              </thead>
+              <tbody id="term-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 2: Context -->
+        <div id="tab-context" class="tab-panel hidden">
+          <div id="context-map" class="mind-map"></div>
+        </div>
+
+        <!-- Tab 3: Legal Theory -->
+        <div id="tab-legal-theory" class="tab-panel hidden">
+          <div id="legal-theory-map" class="mind-map"></div>
+        </div>
+
+        <!-- Tab 4: Industry -->
+        <div id="tab-industry" class="tab-panel hidden">
+          <div id="industry-overview" class="industry-overview"></div>
+          <div id="industry-flow" class="mind-map"></div>
+        </div>
+
+        <!-- Tab 5: Hazards -->
+        <div id="tab-hazards" class="tab-panel hidden">
+          <div class="tab-toolbar">
+            <select id="hazard-sort" class="filter-select">
+              <option value="severity">Sort by severity</option>
+              <option value="scenario">Sort by scenario</option>
+            </select>
+          </div>
+          <div id="hazard-cards" class="card-grid"></div>
+        </div>
+
+        <!-- Tab 6: Quiz -->
+        <div id="tab-quiz" class="tab-panel hidden">
+          <div id="quiz-setup" class="quiz-setup">
+            <h3>Test Your Readiness</h3>
+            <p class="quiz-subtitle">Choose a mode to quiz yourself on this case's terminology</p>
+            <div class="quiz-mode-buttons">
+              <div id="quiz-mcq-btn" class="quiz-mode-card">
+                <span class="mode-icon">&#9889;</span>
+                <div class="mode-title">Speed Quiz</div>
+                <div class="mode-desc">Timed MCQ with speed + streak scoring</div>
+              </div>
+              <div id="quiz-sight-btn" class="quiz-mode-card">
+                <span class="mode-icon">&#127908;</span>
+                <div class="mode-title">Sight Translation</div>
+                <div class="mode-desc">Practice with realistic passages</div>
+              </div>
+            </div>
+            <div id="quiz-history" class="quiz-history"></div>
+          </div>
+
+          <div id="quiz-active" class="quiz-active hidden">
+            <div id="streak-banner" class="streak-banner"></div>
+            <div class="quiz-hud">
+              <div class="quiz-hud-stat">
+                <div class="quiz-hud-label">Question</div>
+                <div id="quiz-progress" class="quiz-hud-value">1/30</div>
+              </div>
+              <div class="quiz-hud-stat">
+                <div class="quiz-hud-label">Streak</div>
+                <div id="quiz-streak" class="quiz-hud-value streak">0</div>
+              </div>
+              <div class="quiz-hud-stat">
+                <div class="quiz-hud-label">Points</div>
+                <div id="quiz-points" class="quiz-hud-value points">0</div>
+              </div>
+              <div class="quiz-hud-stat">
+                <div class="quiz-hud-label">Accuracy</div>
+                <div id="quiz-accuracy" class="quiz-hud-value">-</div>
+              </div>
+            </div>
+            <div id="quiz-countdown-track" class="quiz-countdown-track">
+              <div id="quiz-countdown-bar" class="quiz-countdown-bar"></div>
+            </div>
+            <div id="quiz-question-area" class="quiz-question-area">
+              <div id="quiz-direction" class="quiz-direction">EN&rarr;ZH</div>
+              <div id="quiz-question" class="quiz-question"></div>
+              <div id="quiz-options" class="quiz-options"></div>
+            </div>
+          </div>
+
+          <div id="quiz-results" class="quiz-results hidden">
+            <h3>Performance Report</h3>
+            <div id="quiz-results-grid" class="results-grid"></div>
+            <div id="quiz-breakdown" class="results-breakdown"></div>
+            <div class="results-actions">
+              <button id="quiz-retry-btn" class="btn-primary btn-large">Try Again</button>
+              <button id="quiz-back-btn" class="btn-secondary btn-large">Back</button>
+            </div>
+          </div>
+
+          <div id="sight-active" class="sight-active hidden">
+            <div id="sight-passage" class="sight-passage"></div>
+            <div class="sight-controls">
+              <button id="sight-record-btn" class="btn-primary btn-large">&#127908; Record</button>
+              <button id="sight-next-btn" class="btn-secondary btn-large">Next Passage</button>
+            </div>
+            <div id="sight-result" class="sight-result hidden">
+              <h4>Your interpretation:</h4>
+              <div id="sight-transcription"></div>
+              <div id="sight-key-terms"></div>
+              <div id="sight-score"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

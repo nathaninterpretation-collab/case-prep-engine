@@ -1,0 +1,24 @@
+{
+  "name": "case-prep-engine",
+  "version": "1.0.0",
+  "description": "BilinCo Interpreter Case Preparation System",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "import-trainer": "node scripts/importTrainerData.js",
+    "setup": "node scripts/setup.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "better-sqlite3": "^11.7.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mammoth": "^1.8.0",
+    "multer": "^1.4.5-lts.1",
+    "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^5.5.207",
+    "uuid": "^11.1.0"
+  }
+}
