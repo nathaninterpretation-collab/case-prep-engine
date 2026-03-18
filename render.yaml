@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: case-prep-engine
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+    disk:
+      name: cpe-data
+      mountPath: /opt/render/project/src/server/db
+      sizeGB: 1

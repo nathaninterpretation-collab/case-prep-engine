@@ -39,6 +39,6 @@ app.get('*', (req, res) => {
   res.sendFile(join(__dirname, '..', 'client', 'index.html'));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Case Prep Engine running at http://localhost:${PORT}`);
 });
