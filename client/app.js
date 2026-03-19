@@ -282,6 +282,10 @@ function bindEvents() {
   $('#quiz-mcq-btn').addEventListener('click', startMCQ);
   $('#quiz-sight-btn').addEventListener('click', startSight);
   $('#quiz-context-btn').addEventListener('click', startContextQuiz);
+
+  // Podcast
+  $('#podcast-generate-btn').addEventListener('click', () => generatePodcast(false));
+  $('#podcast-regenerate-btn').addEventListener('click', () => generatePodcast(true));
   $('#quiz-retry-btn').addEventListener('click', startMCQ);
   $('#quiz-back-btn').addEventListener('click', showQuizSetup);
   $('#sight-done-btn').addEventListener('click', showSightAssessment);
@@ -531,6 +535,7 @@ function renderTab(tab) {
     case 'industry': renderIndustry(a.industry_knowledge || {}); break;
     case 'hazards': renderHazards(); break;
     case 'quiz': showQuizSetup(); break;
+    case 'podcast': showPodcastSetup(); break;
   }
 }
 
@@ -2345,6 +2350,122 @@ function exportAllTabsPDF() {
   const win = window.open('', '_blank');
   win.document.write(html);
   win.document.close();
+}
+
+// ===== TAB 7: PODCAST DEEP DIVE =====
+function showPodcastSetup() {
+  const setup = $('#podcast-setup');
+  const loading = $('#podcast-loading');
+  const viewer = $('#podcast-viewer');
+
+  loading.classList.add('hidden');
+
+  // Check for cached script
+  if (state.currentAnalysis?.podcastScript) {
+    setup.classList.add('hidden');
+    viewer.classList.remove('hidden');
+    renderPodcastScript(state.currentAnalysis.podcastScript);
+    return;
+  }
+
+  // Try fetching cached from server
+  if (state.currentCaseId) {
+    apiFetch(`/api/podcast/script/${state.currentCaseId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.script) {
+          state.currentAnalysis.podcastScript = data;
+          setup.classList.add('hidden');
+          viewer.classList.remove('hidden');
+          renderPodcastScript(data);
+        } else {
+          setup.classList.remove('hidden');
+          viewer.classList.add('hidden');
+        }
+      })
+      .catch(() => {
+        setup.classList.remove('hidden');
+        viewer.classList.add('hidden');
+      });
+  } else {
+    setup.classList.remove('hidden');
+    viewer.classList.add('hidden');
+  }
+}
+
+async function generatePodcast(regenerate = false) {
+  if (!state.currentCaseId) return;
+
+  const setup = $('#podcast-setup');
+  const loading = $('#podcast-loading');
+  const viewer = $('#podcast-viewer');
+
+  setup.classList.add('hidden');
+  viewer.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  try {
+    const res = await apiFetch(`/api/podcast/generate/${state.currentCaseId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ regenerate })
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Generation failed');
+    if (!data.script) throw new Error('No script returned');
+
+    // Cache in state
+    state.currentAnalysis.podcastScript = data;
+
+    loading.classList.add('hidden');
+    viewer.classList.remove('hidden');
+    renderPodcastScript(data);
+  } catch (err) {
+    console.error('Podcast generation error:', err);
+    loading.classList.add('hidden');
+    setup.classList.remove('hidden');
+    alert('Podcast generation failed: ' + err.message);
+  }
+}
+
+function renderPodcastScript(data) {
+  // Update meta badges
+  $('#podcast-word-count').textContent = `${data.wordCount?.toLocaleString() || '?'} words`;
+  $('#podcast-runtime').textContent = `~${data.estimatedMinutes || '?'} min at 120 WPM`;
+
+  // Convert markdown script to styled HTML
+  let html = data.script || '';
+
+  // Escape HTML first, then apply formatting
+  html = esc(html);
+
+  // Segment headers: ## [SEGMENT NAME — 0:00-5:00]
+  html = html.replace(/## \[(.+?)\]/g, '<div class="podcast-segment-header">$1</div>');
+
+  // Host labels: **A:** and **B:**
+  html = html.replace(/\*\*A:\*\*/g, '<span class="podcast-host podcast-host-a">A</span>');
+  html = html.replace(/\*\*B:\*\*/g, '<span class="podcast-host podcast-host-b">B</span>');
+
+  // Bold text: **text**
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+  // Italic text: *text*
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  // Chinese terms with pinyin: 中文 (pīnyīn) — highlight them
+  html = html.replace(/([\u4e00-\u9fff\u3400-\u4dbf]{2,})\s*\(([^)]+)\)/g,
+    '<span class="podcast-zh">$1</span> <span class="podcast-pinyin">($2)</span>');
+
+  // Paragraphs — double newlines
+  html = html.replace(/\n\n/g, '</p><p>');
+  html = html.replace(/\n/g, '<br>');
+  html = '<p>' + html + '</p>';
+
+  // Horizontal rules
+  html = html.replace(/<p>---<\/p>/g, '<hr class="podcast-divider">');
+
+  $('#podcast-script-body').innerHTML = html;
 }
 
 // ===== UTILITIES =====

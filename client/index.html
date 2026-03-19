@@ -125,6 +125,7 @@
         <button class="tab-btn" data-tab="industry">INDUSTRY</button>
         <button class="tab-btn" data-tab="hazards">HAZARDS</button>
         <button class="tab-btn" data-tab="quiz">QUIZ</button>
+        <button class="tab-btn" data-tab="podcast">PODCAST</button>
       </nav>
 
       <!-- Tab content panels -->
@@ -293,6 +294,39 @@
             </div>
           </div>
         </div>
+
+        <!-- Tab 7: Podcast Deep Dive -->
+        <div id="tab-podcast" class="tab-panel hidden">
+          <div id="podcast-setup" class="podcast-setup">
+            <div class="podcast-hero">
+              <span class="podcast-hero-icon">🎙️</span>
+              <h3>Podcast Deep Dive</h3>
+              <p class="podcast-subtitle">Generate a NotebookLM-style two-host podcast script that walks through your case preparation in an engaging, conversational format.</p>
+              <div class="podcast-specs">
+                <span class="podcast-spec">🕐 ~30 min script</span>
+                <span class="podcast-spec">💬 Two hosts</span>
+                <span class="podcast-spec">🀄 Chinese terms inline</span>
+              </div>
+              <button id="podcast-generate-btn" class="btn-primary btn-xl podcast-generate-btn">Generate Podcast Script</button>
+              <p class="podcast-note">Uses a separate API call — not included in the main analysis.</p>
+            </div>
+          </div>
+          <div id="podcast-loading" class="podcast-loading hidden">
+            <div class="spinner"></div>
+            <p>Generating podcast script... <span class="podcast-loading-note">This may take 30-60 seconds.</span></p>
+          </div>
+          <div id="podcast-viewer" class="podcast-viewer hidden">
+            <div class="podcast-toolbar">
+              <div class="podcast-meta">
+                <span id="podcast-word-count" class="podcast-meta-badge"></span>
+                <span id="podcast-runtime" class="podcast-meta-badge"></span>
+              </div>
+              <button id="podcast-regenerate-btn" class="btn-small">Regenerate</button>
+            </div>
+            <div id="podcast-script-body" class="podcast-script-body"></div>
+          </div>
+        </div>
+
       </div>
     </main>
   </div>

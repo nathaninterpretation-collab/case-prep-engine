@@ -43,6 +43,8 @@ export function initDb(dbPath) {
   // Add user_id columns if missing (migration for existing DBs)
   try { db.exec('ALTER TABLE cases ADD COLUMN user_id TEXT REFERENCES users(id)'); } catch {}
   try { db.exec('ALTER TABLE quiz_scores ADD COLUMN user_id TEXT REFERENCES users(id)'); } catch {}
+  // Add podcast_json column for cached podcast scripts
+  try { db.exec('ALTER TABLE cases ADD COLUMN podcast_json TEXT'); } catch {}
 
   return db;
 }
