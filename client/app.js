@@ -1773,6 +1773,7 @@ async function startMCQ() {
 }
 
 const QUIZ_TIME_MS = 6000;
+const CONTEXT_QUIZ_TIME_MS = 60000; // 60 seconds for context quiz
 
 function showQuestion() {
   const qs = state.quizState;
@@ -1825,6 +1826,7 @@ function startCountdownBar() {
   const qs = state.quizState;
   const bar = $('#quiz-countdown-bar');
   const startTime = performance.now();
+  const timeLimit = qs.mode === 'context' ? CONTEXT_QUIZ_TIME_MS : QUIZ_TIME_MS;
 
   // Cancel previous
   if (qs.countdownRAF) cancelAnimationFrame(qs.countdownRAF);
@@ -1832,7 +1834,7 @@ function startCountdownBar() {
 
   function animate(now) {
     const elapsed = now - startTime;
-    const remaining = Math.max(0, 1 - elapsed / QUIZ_TIME_MS);
+    const remaining = Math.max(0, 1 - elapsed / timeLimit);
     bar.style.width = (remaining * 100) + '%';
 
     // Color transitions
@@ -1852,7 +1854,7 @@ function startCountdownBar() {
   qs.timer = setTimeout(() => {
     cancelAnimationFrame(qs.countdownRAF);
     answerQuestion(-1);
-  }, QUIZ_TIME_MS);
+  }, timeLimit);
 }
 
 function answerQuestion(idx) {
@@ -2028,26 +2030,30 @@ function generateContextQuestions(nodes, count = 20) {
   const questions = [];
   const shuffle = arr => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
-  // Type identification questions
-  nodes.forEach(n => {
-    const types = ['date', 'location', 'person', 'document', 'amount', 'event'];
-    const others = shuffle(types.filter(t => t !== n.type)).slice(0, 3);
-    questions.push({
-      question: `What type of context element is "${n.label}"?`,
-      direction: 'Context',
-      options: shuffle([n.type, ...others]),
-      correct: n.type,
-      difficulty: 2
+  // 1. "Which element appeared in this case?" — recognition recall
+  const typeGroups = {};
+  nodes.forEach(n => { const t = n.type || 'event'; if (!typeGroups[t]) typeGroups[t] = []; typeGroups[t].push(n); });
+  Object.entries(typeGroups).forEach(([type, group]) => {
+    group.forEach(n => {
+      const fakeLabels = ['Unrelated Corp v. State', 'January 15, 2019', 'Dr. Zhang Wei', 'Form I-485', '$2.5 million settlement', 'Arbitration hearing'];
+      const others = shuffle(fakeLabels.filter(f => f !== n.label)).slice(0, 3);
+      questions.push({
+        question: `Which ${type} appeared in this case?`,
+        direction: 'Recall',
+        options: shuffle([n.label, ...others]),
+        correct: n.label,
+        difficulty: 2
+      });
     });
   });
 
-  // Detail recall questions
+  // 2. "What do you recall about [element]?" — detail retrieval
   nodes.filter(n => n.detail).forEach(n => {
     const otherDetails = shuffle(nodes.filter(nn => nn.id !== n.id && nn.detail).map(nn => nn.detail)).slice(0, 3);
     if (otherDetails.length >= 3) {
       questions.push({
-        question: `What is "${n.label}"?`,
-        direction: 'Context',
+        question: `What do you recall about "${n.label}"?`,
+        direction: 'Recall',
         options: shuffle([n.detail, ...otherDetails]),
         correct: n.detail,
         difficulty: 3
@@ -2055,41 +2061,47 @@ function generateContextQuestions(nodes, count = 20) {
     }
   });
 
-  // Connection questions (if labeled connections exist)
-  nodes.forEach(n => {
-    (n.connections || []).forEach(conn => {
-      if (typeof conn !== 'object' || !conn.label) return;
-      const target = nodes.find(nn => nn.id === conn.target_id);
-      if (!target) return;
-      const otherLabels = shuffle(
-        nodes.flatMap(nn => (nn.connections || [])
-          .filter(c => typeof c === 'object' && c.label && c.label !== conn.label)
-          .map(c => c.label))
-      ).filter((v, i, a) => a.indexOf(v) === i).slice(0, 3);
-      if (otherLabels.length >= 3) {
-        questions.push({
-          question: `What is the relationship between "${n.label}" and "${target.label}"?`,
-          direction: 'Context',
-          options: shuffle([conn.label, ...otherLabels]),
-          correct: conn.label,
-          difficulty: 4
-        });
-      }
-    });
-  });
-
-  // Significance questions
+  // 3. "Why does [element] matter for case preparation?" — significance recall
   nodes.filter(n => n.significance).forEach(n => {
     const otherSigs = shuffle(nodes.filter(nn => nn.id !== n.id && nn.significance).map(nn => nn.significance)).slice(0, 3);
     if (otherSigs.length >= 3) {
       questions.push({
-        question: `Why is "${n.label}" significant to this case?`,
-        direction: 'Context',
+        question: `Why does "${n.label}" matter for case preparation?`,
+        direction: 'Recall',
         options: shuffle([n.significance, ...otherSigs]),
         correct: n.significance,
         difficulty: 3
       });
     }
+  });
+
+  // 4. "Which element is a [type]?" — reverse type recall
+  nodes.forEach(n => {
+    const sameType = nodes.filter(nn => nn.type === n.type && nn.id !== n.id);
+    const diffType = nodes.filter(nn => nn.type !== n.type);
+    if (diffType.length >= 3) {
+      const others = shuffle(diffType).slice(0, 3).map(nn => nn.label);
+      questions.push({
+        question: `Which of these is a ${n.type} in this case?`,
+        direction: 'Recall',
+        options: shuffle([n.label, ...others]),
+        correct: n.label,
+        difficulty: 2
+      });
+    }
+  });
+
+  // 5. "What type of element is [label]?" — classification recall
+  nodes.forEach(n => {
+    const types = ['date', 'location', 'person', 'document', 'amount', 'event'];
+    const others = shuffle(types.filter(t => t !== n.type)).slice(0, 3);
+    questions.push({
+      question: `"${n.label}" — what category does this belong to?`,
+      direction: 'Recall',
+      options: shuffle([n.type, ...others]),
+      correct: n.type,
+      difficulty: 1
+    });
   });
 
   return shuffle(questions).slice(0, count);
