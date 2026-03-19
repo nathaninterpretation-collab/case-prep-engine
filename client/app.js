@@ -597,6 +597,11 @@ class MindMapRenderer {
       <linearGradient id="grad-primary" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#EEF2FF"/><stop offset="100%" stop-color="#DBEAFE"/></linearGradient>
       <linearGradient id="grad-coa" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFFBEB"/><stop offset="100%" stop-color="#FEF3C7"/></linearGradient>
       <linearGradient id="grad-term" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FAF5FF"/><stop offset="100%" stop-color="#F0E8FA"/></linearGradient>
+      <linearGradient id="grad-elements" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#EFF6FF"/><stop offset="100%" stop-color="#DBEAFE"/></linearGradient>
+      <linearGradient id="grad-evidence" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ECFDF5"/><stop offset="100%" stop-color="#D1FAE5"/></linearGradient>
+      <linearGradient id="grad-questions" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F5F3FF"/><stop offset="100%" stop-color="#EDE9FE"/></linearGradient>
+      <linearGradient id="grad-answers" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FDF2F8"/><stop offset="100%" stop-color="#FCE7F3"/></linearGradient>
+      <linearGradient id="grad-step" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F0F9FF"/><stop offset="100%" stop-color="#E0F2FE"/></linearGradient>
     `;
     this.svg.appendChild(defs);
 
@@ -1201,10 +1206,10 @@ function renderLegalTheory(theory) {
 
   // Measure each COA's subtree width to allocate space
   const branchDefs = [
-    { key: 'elements', label: 'Elements', icon: '\uD83E\uDDE9', color: '#3b82f6' },
-    { key: 'evidence', label: 'Evidence', icon: '\uD83D\uDD0D', color: '#22c55e' },
-    { key: 'questions', label: 'Questions', icon: '\u2753', color: '#8b5cf6' },
-    { key: 'answers', label: 'Answers', icon: '\uD83D\uDCAC', color: '#ec4899' },
+    { key: 'elements', label: 'Elements', icon: '\uD83E\uDDE9', color: '#3b82f6', gradientId: 'grad-elements' },
+    { key: 'evidence', label: 'Evidence', icon: '\uD83D\uDD0D', color: '#22c55e', gradientId: 'grad-evidence' },
+    { key: 'questions', label: 'Questions', icon: '\u2753', color: '#8b5cf6', gradientId: 'grad-questions' },
+    { key: 'answers', label: 'Answers', icon: '\uD83D\uDCAC', color: '#ec4899', gradientId: 'grad-answers' },
   ];
 
   const BRANCH_W = 170; // width per branch column
@@ -1268,7 +1273,7 @@ function renderLegalTheory(theory) {
         id: branchId, x: bx, y: branchY,
         label: `${branch.label} (${branch.items.length})`,
         icon: branch.icon,
-        gradientId: 'grad-default', stroke: branch.color,
+        gradientId: branch.gradientId, stroke: branch.color, accentColor: branch.color,
         tier: 1, width: 155, height: 40,
         detailHtml: `<div class="mm-detail-section">
           <div class="mm-detail-label">${esc(branch.label)}</div>
@@ -1286,7 +1291,7 @@ function renderLegalTheory(theory) {
         mmNodes.push({
           id: leafId, x: bx, y: ly,
           label: item.length > 25 ? item.slice(0, 23) + '...' : item,
-          gradientId: 'grad-default', stroke: branch.color,
+          gradientId: branch.gradientId, stroke: branch.color,
           tier: 2, width: 150, height: 32,
           detail: item
         });
@@ -1349,7 +1354,7 @@ function renderIndustry(knowledge) {
       id: stepId, x: STEP_X, y: curY,
       label: s.step, sublabel: `Step ${si + 1}`,
       icon: '\u25B6',
-      gradientId: 'grad-default', stroke: color, accentColor: color,
+      gradientId: 'grad-step', stroke: color, accentColor: color,
       tier: 0, width: 230, height: 52,
       detailHtml: `<div class="mm-detail-section"><div class="mm-detail-label">Description</div><div>${esc(s.description)}</div></div>`
     });
@@ -1399,6 +1404,17 @@ function renderIndustry(knowledge) {
 }
 
 // ===== TAB 5: HAZARDS =====
+function highlightTermsInText(text, terms) {
+  if (!terms || !terms.length || !text) return esc(text);
+  let result = esc(text);
+  terms.forEach(term => {
+    const escaped = esc(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(${escaped})`, 'gi');
+    result = result.replace(re, '<mark class="hazard-term-highlight">$1</mark>');
+  });
+  return result;
+}
+
 function renderHazards() {
   const hazards = state.currentAnalysis?.hazard_zones || [];
   const sortBy = $('#hazard-sort')?.value || 'severity';
@@ -1407,20 +1423,23 @@ function renderHazards() {
   );
   const c = $('#hazard-cards');
   if (!sorted.length) { c.innerHTML = '<p class="tab-empty">No hazard zones generated.</p>'; return; }
-  c.innerHTML = sorted.map(h => `
-    <div class="hazard-card">
+
+  c.innerHTML = sorted.map(h => {
+    const sev = h.severity || 3;
+    const terms = h.critical_terms || [];
+    return `
+    <div class="hazard-card hazard-sev-${sev}">
       <div class="hazard-header">
-        <div class="hazard-scenario">${esc(h.scenario)}</div>
-        <span class="hazard-severity sev-${h.severity||3}">SEV ${h.severity||3}</span>
+        <div class="hazard-scenario">${highlightTermsInText(h.scenario, terms)}</div>
+        <span class="hazard-severity sev-${sev}">SEV ${sev}</span>
       </div>
-      <div class="hazard-why">${esc(h.why_hard)}</div>
+      <div class="hazard-why">${highlightTermsInText(h.why_hard, terms)}</div>
       ${h.example_exchange ? `<div class="hazard-exchange">
-        <div class="line"><span class="speaker">Attorney:</span> ${esc(h.example_exchange.attorney_asks||'')}</div>
-        <div class="line"><span class="speaker">Witness:</span> ${esc(h.example_exchange.witness_answers||'')}</div>
+        <div class="line"><span class="speaker">Attorney:</span> ${highlightTermsInText(h.example_exchange.attorney_asks || '', terms)}</div>
+        <div class="line"><span class="speaker">Witness:</span> ${highlightTermsInText(h.example_exchange.witness_answers || '', terms)}</div>
       </div>` : ''}
-      <div class="hazard-terms">${(h.critical_terms||[]).map(t => `<span class="hazard-term-chip">${esc(t)}</span>`).join('')}</div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 // ===== TAB 6: QUIZ =====
