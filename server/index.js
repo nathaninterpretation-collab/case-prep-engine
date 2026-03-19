@@ -11,7 +11,9 @@ import authRoutes from './routes/auth.js';
 import { requireAuth } from './middleware/auth.js';
 
 // Node v24: dotenv.config() may not populate process.env automatically
-const dotenvResult = dotenv.config();
+const __filename_env = fileURLToPath(import.meta.url);
+const __dirname_env = dirname(__filename_env);
+const dotenvResult = dotenv.config({ path: join(__dirname_env, '..', '.env') });
 if (dotenvResult.parsed) {
   for (const [key, value] of Object.entries(dotenvResult.parsed)) {
     if (!process.env[key]) process.env[key] = value;

@@ -803,8 +803,7 @@ body {
 }
 .mm-tooltip.hidden { opacity: 0; display: none; }
 
-/* Edge label pills */
-.mm-edge-label { pointer-events: none; }
+/* Edges */
 .mm-edge { transition: stroke-opacity 0.25s ease, stroke-width 0.25s ease; }
 
 /* Sight Translation Self-Assessment */
@@ -1424,12 +1423,29 @@ body {
       radial-gradient(circle, rgba(255,255,255,0.015) 1px, transparent 1px);
   }
   .mindmap-detail-panel {
-    background: rgba(26, 29, 39, 0.92);
-    border-color: rgba(255,255,255,0.08);
+    background: rgba(22, 24, 32, 0.95);
+    border-color: rgba(255,255,255,0.1);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
   }
+  .mm-detail-header {
+    background: rgba(255,255,255,0.04);
+    border-bottom-color: rgba(255,255,255,0.06);
+  }
+  .mm-detail-title { color: #e2e4e9; }
+  .mm-detail-body { color: #9ba3b0; }
+  .mm-detail-label { color: #6b7280; }
+  .mm-detail-tag { background: rgba(37, 99, 235, 0.15); color: #93b4f5; }
+  .mm-detail-list li { border-bottom-color: rgba(255,255,255,0.06); }
   .mindmap-controls {
-    background: rgba(26, 29, 39, 0.88);
-    border-color: rgba(255,255,255,0.08);
+    background: rgba(22, 24, 32, 0.92);
+    border-color: rgba(255,255,255,0.1);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .mm-ctrl { color: #9ba3b0; }
+  .mm-ctrl:hover { background: rgba(37, 99, 235, 0.2); color: #93b4f5; }
+  .mm-tooltip {
+    background: rgba(10, 12, 18, 0.95);
+    border: 1px solid rgba(255,255,255,0.1);
   }
 }
 

@@ -618,37 +618,51 @@ class MindMapRenderer {
     this.svg.style.cursor = 'grab';
     this.container.appendChild(this.svg);
 
-    // Defs: gradients, filters, markers
+    // Defs: gradients, filters, markers — dark-mode aware
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+
+    // Gradient definitions: [light-top, light-bottom, dark-top, dark-bottom]
+    const gradDefs = {
+      'grad-date':      ['#F0F4FF','#E4EAFB', '#1c2340','#1a2038'],
+      'grad-location':  ['#EEFAF2','#DEF2E5', '#162e20','#14281c'],
+      'grad-person':    ['#FFF9F0','#F8EDDA', '#2e2618','#282014'],
+      'grad-document':  ['#F5F7FA','#EAECF0', '#1e2028','#1a1c24'],
+      'grad-amount':    ['#FDF3F1','#F5E4E1', '#2e1c18','#281816'],
+      'grad-event':     ['#F6F2FD','#EBE2F6', '#221c30','#1e182a'],
+      'grad-default':   ['#FAFBFC','#F0F2F5', '#1e2028','#1a1c24'],
+      'grad-primary':   ['#EEF2FF','#DBEAFE', '#182040','#162038'],
+      'grad-coa':       ['#FFFBEB','#FEF3C7', '#2a2410','#24200e'],
+      'grad-term':      ['#FAF5FF','#F0E8FA', '#221830','#1e1428'],
+      'grad-elements':  ['#EFF6FF','#DBEAFE', '#162040','#142038'],
+      'grad-evidence':  ['#ECFDF5','#D1FAE5', '#122e1e','#10281a'],
+      'grad-questions': ['#F5F3FF','#EDE9FE', '#1e1838','#1a1430'],
+      'grad-answers':   ['#FDF2F8','#FCE7F3', '#2a1424','#24101e'],
+      'grad-step':      ['#F0F9FF','#E0F2FE', '#142838','#122430'],
+    };
+
+    let gradientsSvg = '';
+    for (const [id, [lt, lb, dt, db]] of Object.entries(gradDefs)) {
+      const t = isDark ? dt : lt;
+      const b = isDark ? db : lb;
+      gradientsSvg += `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${t}"/><stop offset="100%" stop-color="${b}"/></linearGradient>\n`;
+    }
+
     defs.innerHTML = `
       <marker id="mm-arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-        <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--text-3)" opacity="0.4"/>
+        <path d="M 0 1 L 10 5 L 0 9 z" fill="${isDark ? '#5a6272' : 'var(--text-3)'}" opacity="0.5"/>
       </marker>
       <filter id="mm-shadow" x="-25%" y="-25%" width="150%" height="150%">
-        <feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.08"/>
-        <feDropShadow dx="0" dy="3" stdDeviation="6" flood-opacity="0.05"/>
-        <feDropShadow dx="0" dy="6" stdDeviation="12" flood-opacity="0.03"/>
+        <feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="${isDark ? '0.3' : '0.08'}"/>
+        <feDropShadow dx="0" dy="3" stdDeviation="6" flood-opacity="${isDark ? '0.2' : '0.05'}"/>
+        <feDropShadow dx="0" dy="6" stdDeviation="12" flood-opacity="${isDark ? '0.15' : '0.03'}"/>
       </filter>
       <filter id="mm-shadow-hover" x="-25%" y="-25%" width="150%" height="150%">
-        <feDropShadow dx="0" dy="2" stdDeviation="4" flood-opacity="0.12"/>
-        <feDropShadow dx="0" dy="6" stdDeviation="12" flood-opacity="0.08"/>
-        <feDropShadow dx="0" dy="12" stdDeviation="20" flood-opacity="0.05"/>
+        <feDropShadow dx="0" dy="2" stdDeviation="4" flood-opacity="${isDark ? '0.35' : '0.12'}"/>
+        <feDropShadow dx="0" dy="6" stdDeviation="12" flood-opacity="${isDark ? '0.25' : '0.08'}"/>
+        <feDropShadow dx="0" dy="12" stdDeviation="20" flood-opacity="${isDark ? '0.2' : '0.05'}"/>
       </filter>
-      <linearGradient id="grad-date" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F0F4FF"/><stop offset="100%" stop-color="#E4EAFB"/></linearGradient>
-      <linearGradient id="grad-location" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#EEFAF2"/><stop offset="100%" stop-color="#DEF2E5"/></linearGradient>
-      <linearGradient id="grad-person" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFF9F0"/><stop offset="100%" stop-color="#F8EDDA"/></linearGradient>
-      <linearGradient id="grad-document" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F5F7FA"/><stop offset="100%" stop-color="#EAECF0"/></linearGradient>
-      <linearGradient id="grad-amount" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FDF3F1"/><stop offset="100%" stop-color="#F5E4E1"/></linearGradient>
-      <linearGradient id="grad-event" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F6F2FD"/><stop offset="100%" stop-color="#EBE2F6"/></linearGradient>
-      <linearGradient id="grad-default" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FAFBFC"/><stop offset="100%" stop-color="#F0F2F5"/></linearGradient>
-      <linearGradient id="grad-primary" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#EEF2FF"/><stop offset="100%" stop-color="#DBEAFE"/></linearGradient>
-      <linearGradient id="grad-coa" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFFBEB"/><stop offset="100%" stop-color="#FEF3C7"/></linearGradient>
-      <linearGradient id="grad-term" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FAF5FF"/><stop offset="100%" stop-color="#F0E8FA"/></linearGradient>
-      <linearGradient id="grad-elements" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#EFF6FF"/><stop offset="100%" stop-color="#DBEAFE"/></linearGradient>
-      <linearGradient id="grad-evidence" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ECFDF5"/><stop offset="100%" stop-color="#D1FAE5"/></linearGradient>
-      <linearGradient id="grad-questions" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F5F3FF"/><stop offset="100%" stop-color="#EDE9FE"/></linearGradient>
-      <linearGradient id="grad-answers" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FDF2F8"/><stop offset="100%" stop-color="#FCE7F3"/></linearGradient>
-      <linearGradient id="grad-step" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F0F9FF"/><stop offset="100%" stop-color="#E0F2FE"/></linearGradient>
+      ${gradientsSvg}
     `;
     this.svg.appendChild(defs);
 
@@ -825,7 +839,7 @@ class MindMapRenderer {
       hitArea.setAttribute('d', d);
       hitArea.setAttribute('fill', 'none');
       hitArea.setAttribute('stroke', 'transparent');
-      hitArea.setAttribute('stroke-width', '16');
+      hitArea.setAttribute('stroke-width', '28');
       hitArea.style.cursor = edge.label ? 'pointer' : 'default';
       this.edgeGroup.appendChild(hitArea);
 
@@ -842,52 +856,20 @@ class MindMapRenderer {
       if (edge.dashed) path.setAttribute('stroke-dasharray', '5,5');
       this.edgeGroup.appendChild(path);
 
-      // Edge label with background pill
-      const midX = (from.x + to.x) / 2;
-      const midY = (from.y + to.y) / 2;
-      let labelGroup = null;
-      if (edge.label) {
-        labelGroup = document.createElementNS(NS, 'g');
-        labelGroup.classList.add('mm-edge-label');
-        const pill = document.createElementNS(NS, 'rect');
-        const txt = document.createElementNS(NS, 'text');
-        txt.setAttribute('x', midX);
-        txt.setAttribute('y', midY + 3);
-        txt.setAttribute('text-anchor', 'middle');
-        txt.setAttribute('fill', 'var(--text-2)');
-        txt.setAttribute('font-size', '9');
-        txt.setAttribute('font-weight', '500');
-        txt.setAttribute('font-family', "'Inter', var(--font)");
-        txt.setAttribute('letter-spacing', '0.2');
-        const truncLabel = edge.label.length > 20 ? edge.label.slice(0, 18) + '...' : edge.label;
-        txt.textContent = truncLabel;
-        // Pill background sized to text
-        const pw = Math.max(40, truncLabel.length * 5.5 + 12);
-        pill.setAttribute('x', midX - pw / 2);
-        pill.setAttribute('y', midY - 8);
-        pill.setAttribute('width', pw);
-        pill.setAttribute('height', 16);
-        pill.setAttribute('rx', 8);
-        pill.setAttribute('fill', 'var(--surface)');
-        pill.setAttribute('stroke', 'var(--border-light)');
-        pill.setAttribute('stroke-width', '0.5');
-        pill.setAttribute('opacity', '0.92');
-        labelGroup.appendChild(pill);
-        labelGroup.appendChild(txt);
-        this.labelGroup.appendChild(labelGroup);
-      }
+      // No permanent edge labels — all labels shown only via hover tooltip
 
-      // Edge hover interactions
+      // Edge hover — tooltip only, no permanent text clutter
       const onEnter = (e) => {
-        path.setAttribute('stroke-opacity', '0.7');
-        path.setAttribute('stroke-width', (edge.width || 1.5) + 1);
+        path.setAttribute('stroke-opacity', '0.8');
+        path.setAttribute('stroke-width', (edge.width || 1.5) + 1.5);
         if (edge.label) {
           self.tooltip.textContent = edge.label;
+          self.tooltip.style.whiteSpace = 'nowrap';
+          self.tooltip.style.maxWidth = '300px';
           self.tooltip.classList.remove('hidden');
           const cr = self.container.getBoundingClientRect();
-          const svgPt = self.svg.getBoundingClientRect();
-          self.tooltip.style.left = (e.clientX - cr.left + 12) + 'px';
-          self.tooltip.style.top = (e.clientY - cr.top - 28) + 'px';
+          self.tooltip.style.left = (e.clientX - cr.left + 14) + 'px';
+          self.tooltip.style.top = (e.clientY - cr.top - 36) + 'px';
         }
       };
       const onLeave = () => {
@@ -899,8 +881,8 @@ class MindMapRenderer {
       hitArea.addEventListener('mousemove', (e) => {
         if (!self.tooltip.classList.contains('hidden')) {
           const cr = self.container.getBoundingClientRect();
-          self.tooltip.style.left = (e.clientX - cr.left + 12) + 'px';
-          self.tooltip.style.top = (e.clientY - cr.top - 28) + 'px';
+          self.tooltip.style.left = (e.clientX - cr.left + 14) + 'px';
+          self.tooltip.style.top = (e.clientY - cr.top - 36) + 'px';
         }
       });
       hitArea.addEventListener('mouseleave', onLeave);
@@ -917,8 +899,8 @@ class MindMapRenderer {
       g.style.transition = `opacity 0.4s ease ${ni * 25}ms, transform 0.15s ease`;
 
       const isExpanded = this.expandedNodes.has(node.id);
-      const w = node.width || (node.tier === 0 ? 190 : node.tier === 1 ? 165 : 145);
-      const h = node.height || (node.tier === 0 ? 54 : node.tier === 1 ? 44 : 36);
+      const w = node.width || (node.tier === 0 ? 210 : node.tier === 1 ? 180 : 165);
+      const h = node.height || (node.tier === 0 ? 58 : node.tier === 1 ? 48 : 42);
       const rx = node.tier === 0 ? 14 : node.tier === 1 ? 12 : 10;
 
       // Gradient fill ID
@@ -933,12 +915,14 @@ class MindMapRenderer {
       rect.setAttribute('rx', rx);
       rect.setAttribute('fill', `url(#${gradId})`);
       const defaultStrokeW = node.accentColor ? 1.5 : 1;
-      rect.setAttribute('stroke', isExpanded ? 'var(--primary)' : (node.stroke || '#D1D5DB'));
+      const defaultStroke = window.matchMedia('(prefers-color-scheme: dark)').matches ? '#3a4050' : '#D1D5DB';
+      rect.setAttribute('stroke', isExpanded ? 'var(--primary)' : (node.stroke || defaultStroke));
       rect.setAttribute('stroke-width', isExpanded ? 2.5 : defaultStrokeW);
       rect.setAttribute('filter', 'url(#mm-shadow)');
       g.appendChild(rect);
 
-      // Top highlight (glass reflection)
+      // Top highlight (glass reflection) — subtler in dark mode
+      const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
       const highlight = document.createElementNS(NS, 'rect');
       highlight.setAttribute('x', -w / 2 + 1);
       highlight.setAttribute('y', -h / 2 + 1);
@@ -946,7 +930,7 @@ class MindMapRenderer {
       highlight.setAttribute('height', h * 0.4);
       highlight.setAttribute('rx', rx - 1);
       highlight.setAttribute('fill', 'white');
-      highlight.setAttribute('opacity', '0.18');
+      highlight.setAttribute('opacity', isDarkMode ? '0.06' : '0.18');
       highlight.setAttribute('pointer-events', 'none');
       g.appendChild(highlight);
 
@@ -1008,22 +992,30 @@ class MindMapRenderer {
         g.appendChild(sub);
       }
 
-      // Expand indicator — subtle chevron instead of +/- circle
+      // Expand indicator — info icon dot, visible and clickable
       if (node.detail || node.detailHtml || node.children?.length) {
-        const chevG = document.createElementNS(NS, 'g');
-        chevG.setAttribute('transform', `translate(${w / 2 - 14}, 0)`);
-        chevG.style.transition = 'transform 0.2s ease';
-        if (isExpanded) chevG.setAttribute('transform', `translate(${w / 2 - 14}, 0) rotate(90)`);
-        const chevPath = document.createElementNS(NS, 'path');
-        chevPath.setAttribute('d', 'M-3,-4 L2,0 L-3,4');
-        chevPath.setAttribute('fill', 'none');
-        chevPath.setAttribute('stroke', isExpanded ? 'var(--primary)' : 'var(--text-3)');
-        chevPath.setAttribute('stroke-width', '1.5');
-        chevPath.setAttribute('stroke-linecap', 'round');
-        chevPath.setAttribute('stroke-linejoin', 'round');
-        chevPath.setAttribute('pointer-events', 'none');
-        chevG.appendChild(chevPath);
-        g.appendChild(chevG);
+        const indX = w / 2 - 16;
+        const indCircle = document.createElementNS(NS, 'circle');
+        indCircle.setAttribute('cx', indX);
+        indCircle.setAttribute('cy', 0);
+        indCircle.setAttribute('r', 10);
+        indCircle.setAttribute('fill', isExpanded ? 'var(--primary)' : 'rgba(128,128,128,0.12)');
+        indCircle.setAttribute('stroke', isExpanded ? 'var(--primary)' : 'rgba(128,128,128,0.3)');
+        indCircle.setAttribute('stroke-width', '1');
+        indCircle.style.cursor = 'pointer';
+        indCircle.style.transition = 'fill 0.2s, stroke 0.2s';
+        g.appendChild(indCircle);
+        const indIcon = document.createElementNS(NS, 'text');
+        indIcon.setAttribute('x', indX);
+        indIcon.setAttribute('y', 4.5);
+        indIcon.setAttribute('text-anchor', 'middle');
+        indIcon.setAttribute('font-size', '12');
+        indIcon.setAttribute('font-weight', '700');
+        indIcon.setAttribute('fill', isExpanded ? '#fff' : 'var(--text-3)');
+        indIcon.setAttribute('pointer-events', 'none');
+        indIcon.setAttribute('font-family', "'Inter', var(--font)");
+        indIcon.textContent = isExpanded ? '\u2212' : 'i';
+        g.appendChild(indIcon);
       }
 
       // Click
@@ -1058,7 +1050,7 @@ class MindMapRenderer {
       g.addEventListener('mouseleave', () => {
         if (!this.expandedNodes.has(node.id)) {
           rect.setAttribute('filter', 'url(#mm-shadow)');
-          rect.setAttribute('stroke', node.stroke || '#D1D5DB');
+          rect.setAttribute('stroke', node.stroke || defaultStroke);
           rect.setAttribute('stroke-width', node.accentColor ? '1.5' : '1');
         }
         g.style.transform = '';
@@ -1089,6 +1081,7 @@ class MindMapRenderer {
   }
 
   _updateNodeStates() {
+    const darkFallback = window.matchMedia('(prefers-color-scheme: dark)').matches ? '#3a4050' : '#D1D5DB';
     const nodeEls = this.nodeGroup.querySelectorAll('.mm-node');
     nodeEls.forEach((g, i) => {
       if (i >= this.nodes.length) return;
@@ -1096,21 +1089,18 @@ class MindMapRenderer {
       const isExpanded = this.expandedNodes.has(node.id);
       const rect = g.querySelector('rect');
       if (rect) {
-        rect.setAttribute('stroke', isExpanded ? 'var(--primary)' : (node.stroke || '#D1D5DB'));
+        rect.setAttribute('stroke', isExpanded ? 'var(--primary)' : (node.stroke || darkFallback));
         rect.setAttribute('stroke-width', isExpanded ? 2.5 : (node.accentColor ? 1.5 : 1));
       }
-      // Update chevron rotation
-      const chevGs = g.querySelectorAll('g');
-      chevGs.forEach(cg => {
-        const path = cg.querySelector('path[d^="M-3"]');
-        if (path) {
-          const w = node.width || (node.tier === 0 ? 190 : node.tier === 1 ? 165 : 145);
-          cg.setAttribute('transform', isExpanded
-            ? `translate(${w / 2 - 14}, 0) rotate(90)`
-            : `translate(${w / 2 - 14}, 0)`);
-          path.setAttribute('stroke', isExpanded ? 'var(--primary)' : 'var(--text-3)');
-        }
-      });
+      // Update info indicator
+      const indCircle = g.querySelector('circle:last-of-type');
+      const indText = g.querySelector('text:last-of-type');
+      if (indCircle && indText && indText.textContent.match(/[i\u2212]/)) {
+        indCircle.setAttribute('fill', isExpanded ? 'var(--primary)' : 'rgba(128,128,128,0.12)');
+        indCircle.setAttribute('stroke', isExpanded ? 'var(--primary)' : 'rgba(128,128,128,0.3)');
+        indText.setAttribute('fill', isExpanded ? '#fff' : 'var(--text-3)');
+        indText.textContent = isExpanded ? '\u2212' : 'i';
+      }
     });
   }
 
