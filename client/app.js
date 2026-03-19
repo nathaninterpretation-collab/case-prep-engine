@@ -624,13 +624,15 @@ class MindMapRenderer {
       <marker id="mm-arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
         <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--text-3)" opacity="0.4"/>
       </marker>
-      <filter id="mm-shadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.06"/>
-        <feDropShadow dx="0" dy="4" stdDeviation="8" flood-opacity="0.04"/>
+      <filter id="mm-shadow" x="-25%" y="-25%" width="150%" height="150%">
+        <feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.08"/>
+        <feDropShadow dx="0" dy="3" stdDeviation="6" flood-opacity="0.05"/>
+        <feDropShadow dx="0" dy="6" stdDeviation="12" flood-opacity="0.03"/>
       </filter>
-      <filter id="mm-shadow-hover" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="2" stdDeviation="4" flood-opacity="0.1"/>
-        <feDropShadow dx="0" dy="8" stdDeviation="16" flood-opacity="0.06"/>
+      <filter id="mm-shadow-hover" x="-25%" y="-25%" width="150%" height="150%">
+        <feDropShadow dx="0" dy="2" stdDeviation="4" flood-opacity="0.12"/>
+        <feDropShadow dx="0" dy="6" stdDeviation="12" flood-opacity="0.08"/>
+        <feDropShadow dx="0" dy="12" stdDeviation="20" flood-opacity="0.05"/>
       </filter>
       <linearGradient id="grad-date" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F0F4FF"/><stop offset="100%" stop-color="#E4EAFB"/></linearGradient>
       <linearGradient id="grad-location" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#EEFAF2"/><stop offset="100%" stop-color="#DEF2E5"/></linearGradient>
@@ -833,11 +835,11 @@ class MindMapRenderer {
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', edge.color || 'var(--border)');
       path.setAttribute('stroke-width', edge.width || 1.5);
-      path.setAttribute('stroke-opacity', '0.3');
+      path.setAttribute('stroke-opacity', '0.45');
       path.setAttribute('stroke-linecap', 'round');
       if (!edge.noArrow) path.setAttribute('marker-end', 'url(#mm-arrow)');
       path.classList.add('mm-edge');
-      if (edge.dashed) path.setAttribute('stroke-dasharray', '6,4');
+      if (edge.dashed) path.setAttribute('stroke-dasharray', '5,5');
       this.edgeGroup.appendChild(path);
 
       // Edge label with background pill
@@ -889,7 +891,7 @@ class MindMapRenderer {
         }
       };
       const onLeave = () => {
-        path.setAttribute('stroke-opacity', '0.3');
+        path.setAttribute('stroke-opacity', '0.45');
         path.setAttribute('stroke-width', edge.width || 1.5);
         self.tooltip.classList.add('hidden');
       };
@@ -922,7 +924,7 @@ class MindMapRenderer {
       // Gradient fill ID
       const gradId = node.gradientId || 'grad-default';
 
-      // Main rect with shadow filter
+      // Main rect with shadow filter + colored shell
       const rect = document.createElementNS(NS, 'rect');
       rect.setAttribute('x', -w / 2);
       rect.setAttribute('y', -h / 2);
@@ -930,8 +932,9 @@ class MindMapRenderer {
       rect.setAttribute('height', h);
       rect.setAttribute('rx', rx);
       rect.setAttribute('fill', `url(#${gradId})`);
+      const defaultStrokeW = node.accentColor ? 1.5 : 1;
       rect.setAttribute('stroke', isExpanded ? 'var(--primary)' : (node.stroke || '#D1D5DB'));
-      rect.setAttribute('stroke-width', isExpanded ? 2 : 1);
+      rect.setAttribute('stroke-width', isExpanded ? 2.5 : defaultStrokeW);
       rect.setAttribute('filter', 'url(#mm-shadow)');
       g.appendChild(rect);
 
@@ -940,20 +943,20 @@ class MindMapRenderer {
       highlight.setAttribute('x', -w / 2 + 1);
       highlight.setAttribute('y', -h / 2 + 1);
       highlight.setAttribute('width', w - 2);
-      highlight.setAttribute('height', h * 0.45);
+      highlight.setAttribute('height', h * 0.4);
       highlight.setAttribute('rx', rx - 1);
       highlight.setAttribute('fill', 'white');
-      highlight.setAttribute('opacity', '0.12');
+      highlight.setAttribute('opacity', '0.18');
       highlight.setAttribute('pointer-events', 'none');
       g.appendChild(highlight);
 
-      // Accent bar for tier-0
-      if (node.tier === 0 && node.accentColor) {
+      // Accent bar for all nodes with accentColor
+      if (node.accentColor) {
         const accent = document.createElementNS(NS, 'rect');
         accent.setAttribute('x', -w / 2);
-        accent.setAttribute('y', -h / 2 + 4);
-        accent.setAttribute('width', 3);
-        accent.setAttribute('height', h - 8);
+        accent.setAttribute('y', -h / 2 + (node.tier === 2 ? 3 : 4));
+        accent.setAttribute('width', node.tier === 2 ? 2.5 : 3);
+        accent.setAttribute('height', h - (node.tier === 2 ? 6 : 8));
         accent.setAttribute('rx', '1.5');
         accent.setAttribute('fill', node.accentColor);
         g.appendChild(accent);
@@ -1005,45 +1008,61 @@ class MindMapRenderer {
         g.appendChild(sub);
       }
 
-      // Expand indicator
+      // Expand indicator — subtle chevron instead of +/- circle
       if (node.detail || node.detailHtml || node.children?.length) {
-        const ind = document.createElementNS(NS, 'circle');
-        ind.setAttribute('cx', w / 2 - 12);
-        ind.setAttribute('cy', 0);
-        ind.setAttribute('r', 8);
-        ind.setAttribute('fill', isExpanded ? 'var(--primary)' : 'var(--surface-2)');
-        ind.setAttribute('stroke', isExpanded ? 'var(--primary)' : 'var(--border)');
-        ind.setAttribute('stroke-width', '0.5');
-        g.appendChild(ind);
-        const indTxt = document.createElementNS(NS, 'text');
-        indTxt.setAttribute('x', w / 2 - 12);
-        indTxt.setAttribute('y', 3.5);
-        indTxt.setAttribute('text-anchor', 'middle');
-        indTxt.setAttribute('font-size', '10');
-        indTxt.setAttribute('font-weight', '700');
-        indTxt.setAttribute('fill', isExpanded ? 'white' : 'var(--text-3)');
-        indTxt.setAttribute('pointer-events', 'none');
-        indTxt.textContent = isExpanded ? '\u2212' : '+';
-        g.appendChild(indTxt);
+        const chevG = document.createElementNS(NS, 'g');
+        chevG.setAttribute('transform', `translate(${w / 2 - 14}, 0)`);
+        chevG.style.transition = 'transform 0.2s ease';
+        if (isExpanded) chevG.setAttribute('transform', `translate(${w / 2 - 14}, 0) rotate(90)`);
+        const chevPath = document.createElementNS(NS, 'path');
+        chevPath.setAttribute('d', 'M-3,-4 L2,0 L-3,4');
+        chevPath.setAttribute('fill', 'none');
+        chevPath.setAttribute('stroke', isExpanded ? 'var(--primary)' : 'var(--text-3)');
+        chevPath.setAttribute('stroke-width', '1.5');
+        chevPath.setAttribute('stroke-linecap', 'round');
+        chevPath.setAttribute('stroke-linejoin', 'round');
+        chevPath.setAttribute('pointer-events', 'none');
+        chevG.appendChild(chevPath);
+        g.appendChild(chevG);
       }
 
       // Click
       g.addEventListener('click', (e) => { e.stopPropagation(); this._onNodeClick(node); });
 
-      // Hover
-      g.addEventListener('mouseenter', () => {
+      // Hover — show full text tooltip + visual feedback
+      g.addEventListener('mouseenter', (e) => {
         rect.setAttribute('filter', 'url(#mm-shadow-hover)');
         rect.setAttribute('stroke', node.accentColor || 'var(--primary)');
         rect.setAttribute('stroke-width', '1.5');
         g.style.transform = `translate(${node.x}px,${node.y}px) scale(1.03)`;
+        // Show full-text tooltip if label was truncated
+        const fullLabel = node.label + (node.sublabel ? '\n' + node.sublabel : '');
+        const maxCharsCheck = Math.floor((w - (node.icon ? 40 : 16)) / (node.tier === 0 ? 7 : 6.2));
+        if (node.label.length > maxCharsCheck || (node.sublabel && node.sublabel.length > Math.floor(w / 5.5))) {
+          self.tooltip.textContent = fullLabel;
+          self.tooltip.classList.remove('hidden');
+          const cr = self.container.getBoundingClientRect();
+          self.tooltip.style.left = (e.clientX - cr.left + 14) + 'px';
+          self.tooltip.style.top = (e.clientY - cr.top - 36) + 'px';
+          self.tooltip.style.whiteSpace = 'pre-line';
+          self.tooltip.style.maxWidth = '280px';
+        }
+      });
+      g.addEventListener('mousemove', (e) => {
+        if (!self.tooltip.classList.contains('hidden')) {
+          const cr = self.container.getBoundingClientRect();
+          self.tooltip.style.left = (e.clientX - cr.left + 14) + 'px';
+          self.tooltip.style.top = (e.clientY - cr.top - 36) + 'px';
+        }
       });
       g.addEventListener('mouseleave', () => {
         if (!this.expandedNodes.has(node.id)) {
           rect.setAttribute('filter', 'url(#mm-shadow)');
           rect.setAttribute('stroke', node.stroke || '#D1D5DB');
-          rect.setAttribute('stroke-width', '1');
+          rect.setAttribute('stroke-width', node.accentColor ? '1.5' : '1');
         }
         g.style.transform = '';
+        self.tooltip.classList.add('hidden');
       });
 
       this.nodeGroup.appendChild(g);
@@ -1064,8 +1083,35 @@ class MindMapRenderer {
       this.selectedNode = node;
       this._showDetail(node);
     }
-    this._render();
+    // Lightweight visual update — only update stroke/chevron states without full SVG rebuild
+    this._updateNodeStates();
     if (this.onNodeClick) this.onNodeClick(node);
+  }
+
+  _updateNodeStates() {
+    const nodeEls = this.nodeGroup.querySelectorAll('.mm-node');
+    nodeEls.forEach((g, i) => {
+      if (i >= this.nodes.length) return;
+      const node = this.nodes[i];
+      const isExpanded = this.expandedNodes.has(node.id);
+      const rect = g.querySelector('rect');
+      if (rect) {
+        rect.setAttribute('stroke', isExpanded ? 'var(--primary)' : (node.stroke || '#D1D5DB'));
+        rect.setAttribute('stroke-width', isExpanded ? 2.5 : (node.accentColor ? 1.5 : 1));
+      }
+      // Update chevron rotation
+      const chevGs = g.querySelectorAll('g');
+      chevGs.forEach(cg => {
+        const path = cg.querySelector('path[d^="M-3"]');
+        if (path) {
+          const w = node.width || (node.tier === 0 ? 190 : node.tier === 1 ? 165 : 145);
+          cg.setAttribute('transform', isExpanded
+            ? `translate(${w / 2 - 14}, 0) rotate(90)`
+            : `translate(${w / 2 - 14}, 0)`);
+          path.setAttribute('stroke', isExpanded ? 'var(--primary)' : 'var(--text-3)');
+        }
+      });
+    });
   }
 
   _showDetail(node) {
@@ -1249,7 +1295,6 @@ function renderLegalTheory(theory) {
   const mmEdges = [];
   const rootId = 'root';
 
-  // Measure each COA's subtree width to allocate space
   const branchDefs = [
     { key: 'elements', label: 'Elements', icon: '\uD83E\uDDE9', color: '#3b82f6', gradientId: 'grad-elements' },
     { key: 'evidence', label: 'Evidence', icon: '\uD83D\uDD0D', color: '#22c55e', gradientId: 'grad-evidence' },
@@ -1257,8 +1302,10 @@ function renderLegalTheory(theory) {
     { key: 'answers', label: 'Answers', icon: '\uD83D\uDCAC', color: '#ec4899', gradientId: 'grad-answers' },
   ];
 
-  const BRANCH_W = 170; // width per branch column
-  const LEAF_H = 42;    // height per leaf row
+  const BRANCH_W = 200;   // wider branch columns
+  const LEAF_H = 48;      // more breathing room per leaf
+  const LEAF_W = 190;     // wider leaf nodes to show more text
+  const LEAF_NODE_H = 40; // taller leaf nodes
 
   // Calculate width needed for each COA
   const coaWidths = coas.map(ca => {
@@ -1266,10 +1313,10 @@ function renderLegalTheory(theory) {
       const items = ca[b.key === 'evidence' ? 'evidence_needed' : b.key === 'questions' ? 'likely_questions' : b.key === 'answers' ? 'likely_answers' : b.key] || [];
       return items.length > 0;
     });
-    return Math.max(240, activeBranches.length * BRANCH_W);
+    return Math.max(280, activeBranches.length * BRANCH_W);
   });
 
-  const totalWidth = coaWidths.reduce((s, w) => s + w, 0) + (coas.length - 1) * 60;
+  const totalWidth = coaWidths.reduce((s, w) => s + w, 0) + (coas.length - 1) * 80;
   const rootX = totalWidth / 2 + 100;
 
   // Root
@@ -1278,7 +1325,7 @@ function renderLegalTheory(theory) {
     label: 'Legal Theory',
     icon: '\u2696\uFE0F',
     gradientId: 'grad-primary', stroke: '#6B8ACA', accentColor: 'var(--primary)',
-    tier: 0, width: 200, height: 56, textColor: 'var(--primary-dark)'
+    tier: 0, width: 220, height: 58, textColor: 'var(--primary-dark)'
   });
 
   let curX = 100;
@@ -1286,19 +1333,19 @@ function renderLegalTheory(theory) {
     const coaId = `coa-${ci}`;
     const coaW = coaWidths[ci];
     const coaCenterX = curX + coaW / 2;
-    const coaY = 160;
+    const coaY = 170;
 
     mmNodes.push({
       id: coaId, x: coaCenterX, y: coaY,
       label: ca.name, icon: '\uD83D\uDCCB',
       gradientId: 'grad-coa', stroke: '#C4944A', accentColor: '#B5853D',
-      tier: 0, width: Math.min(300, Math.max(200, ca.name.length * 8 + 40)), height: 52,
+      tier: 0, width: Math.min(320, Math.max(220, ca.name.length * 8 + 50)), height: 56,
       detailHtml: `
         <div class="mm-detail-section"><div class="mm-detail-label">Plaintiff Strategy</div><div>${esc(ca.plaintiff_angle || '')}</div></div>
         <div class="mm-detail-section"><div class="mm-detail-label">Defense Strategy</div><div>${esc(ca.defendant_angle || '')}</div></div>
       `
     });
-    mmEdges.push({ from: rootId, to: coaId, color: '#6B8ACA', width: 2, label: 'cause of action' });
+    mmEdges.push({ from: rootId, to: coaId, color: '#6B8ACA', width: 2.5, label: 'cause of action' });
 
     // Branches laid out as columns under this COA
     const branches = branchDefs.map(b => {
@@ -1308,7 +1355,7 @@ function renderLegalTheory(theory) {
     }).filter(b => b.items.length > 0);
 
     const branchStartX = coaCenterX - ((branches.length - 1) * BRANCH_W) / 2;
-    const branchY = coaY + 100;
+    const branchY = coaY + 110;
 
     branches.forEach((branch, bi) => {
       const branchId = `${coaId}-${branch.key}`;
@@ -1319,36 +1366,35 @@ function renderLegalTheory(theory) {
         label: `${branch.label} (${branch.items.length})`,
         icon: branch.icon,
         gradientId: branch.gradientId, stroke: branch.color, accentColor: branch.color,
-        tier: 1, width: 155, height: 40,
+        tier: 1, width: 175, height: 46,
         detailHtml: `<div class="mm-detail-section">
           <div class="mm-detail-label">${esc(branch.label)}</div>
           <ul class="mm-detail-list">${branch.items.map(item => `<li>${esc(item)}</li>`).join('')}</ul>
         </div>`
       });
-      mmEdges.push({ from: coaId, to: branchId, color: branch.color, width: 1.5, label: branch.label.toLowerCase() });
+      mmEdges.push({ from: coaId, to: branchId, color: branch.color, width: 1.8 });
 
-      // Leaf nodes — stack vertically under branch, no overlap
-      const maxLeaves = Math.min(4, branch.items.length);
-      branch.items.slice(0, maxLeaves).forEach((item, ii) => {
+      // Leaf nodes — show ALL items, no truncation cap
+      branch.items.forEach((item, ii) => {
         const leafId = `${branchId}-${ii}`;
-        const ly = branchY + 60 + ii * LEAF_H;
+        const ly = branchY + 72 + ii * LEAF_H;
 
         mmNodes.push({
           id: leafId, x: bx, y: ly,
-          label: item.length > 25 ? item.slice(0, 23) + '...' : item,
-          gradientId: branch.gradientId, stroke: branch.color,
-          tier: 2, width: 150, height: 32,
+          label: item,
+          gradientId: branch.gradientId, stroke: branch.color, accentColor: branch.color,
+          tier: 2, width: LEAF_W, height: LEAF_NODE_H,
           detail: item
         });
         mmEdges.push({ from: branchId, to: leafId, color: branch.color, width: 1, dashed: true });
       });
     });
 
-    curX += coaW + 60;
+    curX += coaW + 80;
   });
 
   // Final overlap pass
-  resolveOverlaps(mmNodes, 12, 8);
+  resolveOverlaps(mmNodes, 16, 10);
 
   const mm = new MindMapRenderer(c);
   mm.setData(mmNodes, mmEdges);
@@ -1369,11 +1415,15 @@ function renderIndustry(knowledge) {
   const mmNodes = [];
   const mmEdges = [];
 
-  const STEP_X = 250;       // x position of step column
-  const TERM_START_X = 520;  // where terms start
-  const TERM_COL_W = 175;    // term column width
-  const TERM_ROW_H = 48;     // term row height
+  const STEP_X = 280;        // x position of step column
+  const TERM_START_X = 560;   // where terms start
+  const TERM_COL_W = 200;     // wider term columns
+  const TERM_ROW_H = 54;      // more vertical breathing room
+  const TERM_W = 185;         // wider term nodes
+  const TERM_H = 44;          // taller term nodes
   const stepColors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#22c55e', '#06b6d4', '#ef4444', '#84cc16'];
+  // Lighter gradient stops per step color for term node backgrounds
+  const stepGradientIds = stepColors.map((c, i) => `grad-step-${i}`);
 
   // Calculate y for each step based on how many terms the previous step had
   let curY = 60;
@@ -1383,24 +1433,24 @@ function renderIndustry(knowledge) {
     id: 'domain-root', x: STEP_X, y: ROOT_Y,
     label: knowledge.domain, icon: '\uD83C\uDFED',
     gradientId: 'grad-primary', stroke: '#6B8ACA', accentColor: 'var(--primary)',
-    tier: 0, width: 240, height: 52, textColor: 'var(--primary-dark)'
+    tier: 0, width: 260, height: 56, textColor: 'var(--primary-dark)'
   });
 
-  curY += 100;
+  curY += 110;
 
   steps.forEach((s, si) => {
     const stepId = `step-${si}`;
     const color = stepColors[si % stepColors.length];
     const terms = s.key_terms || [];
-    const termRows = Math.ceil(terms.length / 2); // 2 columns of terms
-    const stepBlockH = Math.max(60, termRows * TERM_ROW_H);
+    const termRows = Math.ceil(terms.length / 2);
+    const stepBlockH = Math.max(70, termRows * TERM_ROW_H);
 
     mmNodes.push({
       id: stepId, x: STEP_X, y: curY,
       label: s.step, sublabel: `Step ${si + 1}`,
       icon: '\u25B6',
       gradientId: 'grad-step', stroke: color, accentColor: color,
-      tier: 0, width: 230, height: 52,
+      tier: 0, width: 250, height: 56,
       detailHtml: `<div class="mm-detail-section"><div class="mm-detail-label">Description</div><div>${esc(s.description)}</div></div>`
     });
 
@@ -1411,7 +1461,7 @@ function renderIndustry(knowledge) {
       mmEdges.push({ from: `step-${si - 1}`, to: stepId, color: stepColors[(si - 1) % stepColors.length], width: 2 });
     }
 
-    // Terms in 2-column grid to the right
+    // Terms in 2-column grid to the right — use step color for shells
     terms.forEach((t, ti) => {
       const col = ti % 2;
       const row = Math.floor(ti / 2);
@@ -1423,8 +1473,8 @@ function renderIndustry(knowledge) {
         y: curY - (termRows - 1) * TERM_ROW_H / 2 + row * TERM_ROW_H,
         label: t.en,
         sublabel: t.zh_simplified || t.zh_traditional || '',
-        gradientId: 'grad-term', stroke: color,
-        tier: 2, width: 155, height: 38,
+        gradientId: 'grad-term', stroke: color, accentColor: color,
+        tier: 2, width: TERM_W, height: TERM_H,
         detailHtml: `
           <div class="mm-detail-section">
             <div class="mm-detail-label">Terminology</div>
@@ -1432,17 +1482,18 @@ function renderIndustry(knowledge) {
             <div style="font-size:16px;margin:4px 0">${esc(t.zh_simplified || '')} / ${esc(t.zh_traditional || '')}</div>
             <div style="font-style:italic;color:var(--text-3)">${esc(t.pinyin || '')}</div>
           </div>
+          ${t.context_note ? `<div class="mm-detail-section"><div class="mm-detail-label">Context</div><div>${esc(t.context_note)}</div></div>` : ''}
         `
       });
-      mmEdges.push({ from: stepId, to: termId, color, width: 1, dashed: true });
+      mmEdges.push({ from: stepId, to: termId, color, width: 1.2, dashed: true });
     });
 
-    curY += stepBlockH + 50;
+    curY += stepBlockH + 60;
   });
 
   // Resolve overlaps in term area only (don't mess with step column)
   const termNodes = mmNodes.filter(n => n.id.includes('-term-'));
-  resolveOverlaps(termNodes, 14, 10);
+  resolveOverlaps(termNodes, 18, 12);
 
   const mm = new MindMapRenderer(fl);
   mm.setData(mmNodes, mmEdges);
