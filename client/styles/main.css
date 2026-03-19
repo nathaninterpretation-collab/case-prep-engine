@@ -589,7 +589,6 @@ body {
 .mind-map {
   min-height: 500px;
   height: calc(100vh - 200px);
-  max-height: 800px;
 }
 
 .mindmap-container {
@@ -1337,15 +1336,40 @@ body {
 .pdist-4, .pdist-5 { background: var(--danger-light); color: var(--danger); }
 
 /* ===== RESPONSIVE ===== */
+/* Tablet */
+@media (max-width: 1024px) {
+  :root { --sidebar-w: 240px; }
+  .card-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+  .tab-content { padding: 16px; }
+}
+
+/* Mobile */
 @media (max-width: 768px) {
   #sidebar { display: none; }
-  .topbar-right { flex-wrap: wrap; }
+  .topbar-right { flex-wrap: wrap; gap: 6px; }
+  .topbar-left h1 { font-size: 16px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .case-name-input { width: 140px; }
   .card-grid { grid-template-columns: 1fr; }
   .coa-adversarial { grid-template-columns: 1fr; }
   .quiz-options { grid-template-columns: 1fr; }
   .results-grid { grid-template-columns: repeat(2, 1fr); }
   .quiz-mode-buttons { flex-direction: column; align-items: center; }
+  .tab-nav { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .tab-nav::-webkit-scrollbar { display: none; }
+  .tab-btn { white-space: nowrap; padding: 10px 14px; font-size: 11px; }
+  .data-table { font-size: 12px; }
+  .data-table th, .data-table td { padding: 8px 10px; }
+  .mind-map { min-height: 400px; }
+  .upload-hero { padding: 20px; }
+  .upload-dropzone { padding: 30px 20px; }
+}
+
+/* Small mobile */
+@media (max-width: 480px) {
+  .auth-card { padding: 28px 20px; }
+  .topbar-right { gap: 4px; }
+  #export-pdf-btn { display: none; }
+  .results-grid { grid-template-columns: 1fr 1fr; }
 }
 
 /* ===== DARK MODE ===== */
@@ -1451,6 +1475,33 @@ body {
 #auth-form { display: flex; flex-direction: column; gap: 12px; }
 #auth-form .modal-input { width: 100%; padding: 12px 14px; font-size: 15px; font-family: inherit; }
 .auth-error { color: var(--danger); font-size: 13px; min-height: 18px; text-align: left; }
+.auth-forgot-link {
+  font-size: 13px; color: var(--primary); text-decoration: none; text-align: right;
+  display: block; margin-top: -4px;
+}
+.auth-forgot-link:hover { text-decoration: underline; }
+.auth-divider {
+  display: flex; align-items: center; gap: 12px; margin: 20px 0;
+  color: var(--text-3); font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+}
+.auth-divider::before, .auth-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.btn-guest {
+  width: 100%; padding: 14px 20px; border: 2px dashed var(--border);
+  border-radius: var(--radius); background: var(--surface-2);
+  font-size: 14px; font-weight: 600; color: var(--text-2);
+  cursor: pointer; transition: all 0.2s;
+  font-family: inherit;
+}
+.btn-guest:hover {
+  border-color: var(--primary); color: var(--primary);
+  background: var(--primary-light);
+}
+
+/* Logo images */
+.auth-logo-img { width: 72px; height: 72px; object-fit: contain; margin-bottom: 8px; }
+.sidebar-logo-img { width: 36px; height: 36px; object-fit: contain; margin-bottom: 6px; }
 
 /* Sidebar footer */
 .sidebar-footer {

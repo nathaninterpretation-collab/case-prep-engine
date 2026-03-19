@@ -48,7 +48,7 @@ function showApp() {
   $('#auth-screen').style.display = 'none';
   $('#app').style.display = '';
   if (state.user) {
-    $('#user-email').textContent = state.user.email;
+    $('#user-email').textContent = state.isGuest ? 'Guest Mode' : state.user.email;
     updateKeyStatus();
   }
 }
@@ -221,7 +221,52 @@ function bindEvents() {
     state.cases = [];
     state.currentCaseId = null;
     state.currentAnalysis = null;
+    state.isGuest = false;
     showAuthScreen();
+  });
+
+  // Guest mode
+  $('#guest-btn').addEventListener('click', async () => {
+    try {
+      const res = await fetch('/api/auth/guest', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setToken(data.token);
+      state.user = data.user;
+      state.isGuest = true;
+      showApp();
+      // Immediately show API key modal for guests
+      $('#api-key-modal').classList.remove('hidden');
+    } catch (err) {
+      $('#auth-error').textContent = err.message;
+    }
+  });
+
+  // Forgot password
+  $('#forgot-pw-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    $('#forgot-modal').classList.remove('hidden');
+  });
+  $('#forgot-close').addEventListener('click', () => $('#forgot-modal').classList.add('hidden'));
+  $('#forgot-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) $('#forgot-modal').classList.add('hidden');
+  });
+  $('#forgot-submit').addEventListener('click', async () => {
+    const email = $('#forgot-email').value.trim();
+    if (!email) { $('#forgot-status').textContent = 'Enter your email'; return; }
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      $('#forgot-status').textContent = data.message || 'If an account exists, a reset link has been sent.';
+      $('#forgot-status').style.color = 'var(--success)';
+    } catch {
+      $('#forgot-status').textContent = 'If an account exists, a reset link has been sent.';
+      $('#forgot-status').style.color = 'var(--success)';
+    }
   });
 
   // Quiz

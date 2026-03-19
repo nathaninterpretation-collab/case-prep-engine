@@ -13,6 +13,7 @@
   <!-- Auth Screen -->
   <div id="auth-screen" class="auth-screen">
     <div class="auth-card">
+      <img src="assets/logo.png" alt="CPE" class="auth-logo-img" onerror="this.style.display='none'">
       <h2 class="auth-logo">CPE</h2>
       <p class="auth-subtitle">Case Prep Engine</p>
       <div class="auth-tabs">
@@ -24,7 +25,28 @@
         <input type="password" id="auth-password" placeholder="Password (min 8 chars)" required class="modal-input">
         <div id="auth-error" class="auth-error"></div>
         <button type="submit" id="auth-submit" class="btn-primary btn-xl" style="width:100%">Login</button>
+        <a href="#" id="forgot-pw-link" class="auth-forgot-link">Forgot password?</a>
       </form>
+      <div class="auth-divider"><span>or</span></div>
+      <button id="guest-btn" class="btn-guest">Continue as Guest &mdash; Bring Your Own API Key</button>
+    </div>
+  </div>
+
+  <!-- Forgot password modal -->
+  <div id="forgot-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Reset Password</h3>
+        <button id="forgot-close" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Enter your email address. If an account exists, we'll send you a password reset link.</p>
+        <input type="email" id="forgot-email" placeholder="Email" class="modal-input">
+        <div id="forgot-status" class="auth-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="forgot-submit" class="btn-primary">Send Reset Link</button>
+      </div>
     </div>
   </div>
 
@@ -32,6 +54,7 @@
     <!-- Sidebar -->
     <aside id="sidebar">
       <div class="sidebar-header">
+        <img src="assets/logo.png" alt="CPE" class="sidebar-logo-img" onerror="this.style.display='none'">
         <h2>CPE</h2>
         <span class="subtitle">Case Prep Engine</span>
       </div>

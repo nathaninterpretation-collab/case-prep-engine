@@ -78,6 +78,28 @@ export default function authRoutes(db) {
     res.json({ ok: true });
   });
 
+  // Forgot password (stub — needs email service integration)
+  router.post('/forgot-password', (req, res) => {
+    const { email } = req.body;
+    // Always respond positively to prevent email enumeration
+    res.json({ message: 'If an account with this email exists, a password reset link has been sent.' });
+  });
+
+  // Guest mode — generate a temporary JWT with a guest user row
+  router.post('/guest', async (req, res) => {
+    try {
+      const id = uuid();
+      const guestEmail = `guest_${id.slice(0, 8)}@cpe.local`;
+      // Create a guest user row (no password)
+      db.prepare('INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)').run(id, guestEmail, 'GUEST');
+      const token = signToken({ id, email: guestEmail });
+      res.json({ token, user: { id, email: guestEmail, has_api_key: false, is_guest: true } });
+    } catch (err) {
+      console.error('Guest error:', err);
+      res.status(500).json({ error: 'Failed to create guest session' });
+    }
+  });
+
   // Clear API key
   router.delete('/api-key', requireAuth, (req, res) => {
     db.prepare('UPDATE users SET api_key_encrypted = NULL, api_key_iv = NULL, api_key_tag = NULL, updated_at = datetime(\'now\') WHERE id = ?')
