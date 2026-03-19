@@ -1478,6 +1478,13 @@ body {
   padding: 4px 12px; background: var(--surface);
   border-radius: 16px; border: 1px solid var(--border-light);
 }
+.podcast-actions { display: flex; gap: 6px; align-items: center; }
+.podcast-action-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 600; padding: 6px 14px;
+  border-radius: 8px; transition: all 0.15s;
+}
+.podcast-action-btn:hover { transform: scale(1.04); }
 
 /* Script body */
 .podcast-script-body {

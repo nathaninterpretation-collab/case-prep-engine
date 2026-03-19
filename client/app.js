@@ -286,6 +286,9 @@ function bindEvents() {
   // Podcast
   $('#podcast-generate-btn').addEventListener('click', () => generatePodcast(false));
   $('#podcast-regenerate-btn').addEventListener('click', () => generatePodcast(true));
+  $('#podcast-copy-btn').addEventListener('click', copyPodcastScript);
+  $('#podcast-play-btn').addEventListener('click', playPodcastScript);
+  $('#podcast-stop-btn').addEventListener('click', stopPodcastScript);
   $('#quiz-retry-btn').addEventListener('click', startMCQ);
   $('#quiz-back-btn').addEventListener('click', showQuizSetup);
   $('#sight-done-btn').addEventListener('click', showSightAssessment);
@@ -2466,6 +2469,110 @@ function renderPodcastScript(data) {
   html = html.replace(/<p>---<\/p>/g, '<hr class="podcast-divider">');
 
   $('#podcast-script-body').innerHTML = html;
+}
+
+// Copy plain-text script to clipboard (for Natural Reader)
+function copyPodcastScript() {
+  const data = state.currentAnalysis?.podcastScript;
+  if (!data?.script) return;
+
+  // Strip markdown formatting for clean plain text
+  let plain = data.script;
+  plain = plain.replace(/\*\*([^*]+)\*\*/g, '$1');  // bold
+  plain = plain.replace(/\*([^*]+)\*/g, '$1');       // italic
+  plain = plain.replace(/^## /gm, '');               // headers
+  plain = plain.replace(/^---$/gm, '\n');             // dividers
+
+  navigator.clipboard.writeText(plain).then(() => {
+    const btn = $('#podcast-copy-btn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '✅ Copied!';
+    btn.style.color = 'var(--success)';
+    setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
+  }).catch(() => {
+    // Fallback: select all text in the script body
+    const range = document.createRange();
+    range.selectNodeContents($('#podcast-script-body'));
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+    alert('Text selected — press Ctrl+C to copy.');
+  });
+}
+
+// Browser Web Speech API — fallback TTS with two voices
+let podcastSpeechQueue = [];
+let podcastSpeechIdx = 0;
+let podcastSpeaking = false;
+
+function playPodcastScript() {
+  const data = state.currentAnalysis?.podcastScript;
+  if (!data?.script || !window.speechSynthesis) return;
+
+  // Stop any existing playback
+  speechSynthesis.cancel();
+
+  // Parse script into speaker turns
+  const lines = data.script.split('\n').filter(l => l.trim());
+  podcastSpeechQueue = [];
+
+  for (const line of lines) {
+    const clean = line.replace(/\*\*/g, '').replace(/\*/g, '').replace(/^## \[.*\]/, '').trim();
+    if (!clean || clean === '---') continue;
+
+    if (clean.startsWith('A:')) {
+      podcastSpeechQueue.push({ speaker: 'A', text: clean.slice(2).trim() });
+    } else if (clean.startsWith('B:')) {
+      podcastSpeechQueue.push({ speaker: 'B', text: clean.slice(2).trim() });
+    } else if (clean.length > 10) {
+      // Narration or segment header
+      podcastSpeechQueue.push({ speaker: 'A', text: clean });
+    }
+  }
+
+  if (podcastSpeechQueue.length === 0) return;
+
+  // Get available voices — pick two distinct ones
+  const voices = speechSynthesis.getVoices();
+  const enVoices = voices.filter(v => v.lang.startsWith('en'));
+  const voiceA = enVoices.find(v => /male|david|james|daniel/i.test(v.name)) || enVoices[0] || voices[0];
+  const voiceB = enVoices.find(v => v !== voiceA && /female|zira|samantha|karen/i.test(v.name)) || enVoices[1] || voices[1] || voiceA;
+
+  podcastSpeechIdx = 0;
+  podcastSpeaking = true;
+  $('#podcast-play-btn').classList.add('hidden');
+  $('#podcast-stop-btn').classList.remove('hidden');
+
+  function speakNext() {
+    if (podcastSpeechIdx >= podcastSpeechQueue.length || !podcastSpeaking) {
+      stopPodcastScript();
+      return;
+    }
+
+    const item = podcastSpeechQueue[podcastSpeechIdx];
+    const utter = new SpeechSynthesisUtterance(item.text);
+    utter.voice = item.speaker === 'A' ? voiceA : voiceB;
+    utter.rate = 0.95;
+    utter.pitch = item.speaker === 'A' ? 1.0 : 1.1;
+    utter.onend = () => { podcastSpeechIdx++; speakNext(); };
+    utter.onerror = () => { podcastSpeechIdx++; speakNext(); };
+    speechSynthesis.speak(utter);
+  }
+
+  // Voices may load async — wait for them
+  if (voices.length === 0) {
+    speechSynthesis.addEventListener('voiceschanged', () => speakNext(), { once: true });
+  } else {
+    speakNext();
+  }
+}
+
+function stopPodcastScript() {
+  podcastSpeaking = false;
+  speechSynthesis.cancel();
+  podcastSpeechQueue = [];
+  podcastSpeechIdx = 0;
+  $('#podcast-play-btn').classList.remove('hidden');
+  $('#podcast-stop-btn').classList.add('hidden');
 }
 
 // ===== UTILITIES =====
