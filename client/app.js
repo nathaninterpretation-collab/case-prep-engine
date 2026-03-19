@@ -1445,7 +1445,7 @@ function renderContext(nodes) {
   mm.setData(mmNodes, mmEdges);
 }
 
-// ===== TAB 3: LEGAL THEORY (Interactive Mind Map) =====
+// ===== TAB 3: LEGAL THEORY (Radial Starfish Layout) =====
 function renderLegalTheory(theory) {
   const c = $('#legal-theory-map');
   const coas = theory.causes_of_action || [];
@@ -1462,67 +1462,66 @@ function renderLegalTheory(theory) {
     { key: 'answers', label: 'Answers', icon: '\uD83D\uDCAC', color: '#ec4899', gradientId: 'grad-answers' },
   ];
 
-  const BRANCH_W = 200;   // wider branch columns
-  const LEAF_H = 48;      // more breathing room per leaf
-  const LEAF_W = 190;     // wider leaf nodes to show more text
-  const LEAF_NODE_H = 40; // taller leaf nodes
+  // Radial layout — root at center, COAs spread around, branches extend outward
+  const cx = 800, cy = 700;
+  const COA_RADIUS = Math.max(250, coas.length * 80);
+  const BRANCH_RADIUS = 180;
+  const LEAF_SPACING = 52;
+  const LEAF_W = 190;
+  const LEAF_NODE_H = 40;
 
-  // Calculate width needed for each COA
-  const coaWidths = coas.map(ca => {
-    const activeBranches = branchDefs.filter(b => {
-      const items = ca[b.key === 'evidence' ? 'evidence_needed' : b.key === 'questions' ? 'likely_questions' : b.key === 'answers' ? 'likely_answers' : b.key] || [];
-      return items.length > 0;
-    });
-    return Math.max(280, activeBranches.length * BRANCH_W);
-  });
-
-  const totalWidth = coaWidths.reduce((s, w) => s + w, 0) + (coas.length - 1) * 80;
-  const rootX = totalWidth / 2 + 100;
-
-  // Root
+  // Root at center
   mmNodes.push({
-    id: rootId, x: rootX, y: 50,
+    id: rootId, x: cx, y: cy,
     label: 'Legal Theory',
     icon: '\u2696\uFE0F',
     gradientId: 'grad-primary', stroke: '#6B8ACA', accentColor: 'var(--primary)',
     tier: 0, width: 220, height: 58, textColor: 'var(--primary-dark)'
   });
 
-  let curX = 100;
+  // Spread COAs radially around root
+  const coaAngleStep = (2 * Math.PI) / Math.max(coas.length, 1);
+
   coas.forEach((ca, ci) => {
     const coaId = `coa-${ci}`;
-    const coaW = coaWidths[ci];
-    const coaCenterX = curX + coaW / 2;
-    const coaY = 170;
+    const coaAngle = ci * coaAngleStep - Math.PI / 2; // start from top
+    const coaX = cx + Math.cos(coaAngle) * COA_RADIUS;
+    const coaY_pos = cy + Math.sin(coaAngle) * COA_RADIUS;
 
     mmNodes.push({
-      id: coaId, x: coaCenterX, y: coaY,
+      id: coaId, x: coaX, y: coaY_pos,
       label: ca.name, icon: '\uD83D\uDCCB',
       gradientId: 'grad-coa', stroke: '#C4944A', accentColor: '#B5853D',
-      tier: 0, width: Math.min(320, Math.max(220, ca.name.length * 8 + 50)), height: 56,
+      tier: 0, width: Math.min(280, Math.max(200, ca.name.length * 7 + 50)), height: 54,
       detailHtml: `
         <div class="mm-detail-section"><div class="mm-detail-label">Plaintiff Strategy</div><div>${esc(ca.plaintiff_angle || '')}</div></div>
         <div class="mm-detail-section"><div class="mm-detail-label">Defense Strategy</div><div>${esc(ca.defendant_angle || '')}</div></div>
       `
     });
-    mmEdges.push({ from: rootId, to: coaId, color: '#6B8ACA', width: 2.5, label: 'cause of action' });
+    mmEdges.push({ from: rootId, to: coaId, color: '#6B8ACA', width: 2.5 });
 
-    // Branches laid out as columns under this COA
+    // Get active branches for this COA
     const branches = branchDefs.map(b => {
       const keyMap = { evidence: 'evidence_needed', questions: 'likely_questions', answers: 'likely_answers' };
       const items = ca[keyMap[b.key] || b.key] || [];
       return { ...b, items };
     }).filter(b => b.items.length > 0);
 
-    const branchStartX = coaCenterX - ((branches.length - 1) * BRANCH_W) / 2;
-    const branchY = coaY + 110;
+    // Spread branches as tentacles radiating outward from COA
+    const branchSpread = Math.min(Math.PI * 0.6, branches.length * 0.35);
+    const branchBaseAngle = coaAngle; // extend outward from root
 
     branches.forEach((branch, bi) => {
       const branchId = `${coaId}-${branch.key}`;
-      const bx = branchStartX + bi * BRANCH_W;
+      // Fan branches around the COA's outward direction
+      const branchAngle = branchBaseAngle - branchSpread / 2 + (branches.length > 1
+        ? (bi / (branches.length - 1)) * branchSpread
+        : 0);
+      const bx = coaX + Math.cos(branchAngle) * BRANCH_RADIUS;
+      const by = coaY_pos + Math.sin(branchAngle) * BRANCH_RADIUS;
 
       mmNodes.push({
-        id: branchId, x: bx, y: branchY,
+        id: branchId, x: bx, y: by,
         label: `${branch.label} (${branch.items.length})`,
         icon: branch.icon,
         gradientId: branch.gradientId, stroke: branch.color, accentColor: branch.color,
@@ -1534,27 +1533,27 @@ function renderLegalTheory(theory) {
       });
       mmEdges.push({ from: coaId, to: branchId, color: branch.color, width: 1.8 });
 
-      // Leaf nodes — show ALL items, no truncation cap
+      // Leaf nodes — extend further outward along the tentacle direction
       branch.items.forEach((item, ii) => {
         const leafId = `${branchId}-${ii}`;
-        const ly = branchY + 72 + ii * LEAF_H;
+        const leafDist = 80 + ii * LEAF_SPACING;
+        const lx = bx + Math.cos(branchAngle) * leafDist;
+        const ly = by + Math.sin(branchAngle) * leafDist;
 
         mmNodes.push({
-          id: leafId, x: bx, y: ly,
+          id: leafId, x: lx, y: ly,
           label: item,
           gradientId: branch.gradientId, stroke: branch.color, accentColor: branch.color,
           tier: 2, width: LEAF_W, height: LEAF_NODE_H,
           detail: item
         });
-        mmEdges.push({ from: branchId, to: leafId, color: branch.color, width: 1, dashed: true });
+        mmEdges.push({ from: ii === 0 ? branchId : `${branchId}-${ii - 1}`, to: leafId, color: branch.color, width: 1, dashed: true });
       });
     });
-
-    curX += coaW + 80;
   });
 
-  // Final overlap pass
-  resolveOverlaps(mmNodes, 16, 10);
+  // Resolve overlaps
+  resolveOverlaps(mmNodes, 20, 14);
 
   const mm = new MindMapRenderer(c);
   mm.setData(mmNodes, mmEdges);
