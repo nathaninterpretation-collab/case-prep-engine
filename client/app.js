@@ -130,6 +130,15 @@ function bindEvents() {
   $('#term-domain-filter').addEventListener('change', filterTermTable);
   $('#term-export').addEventListener('click', exportTerms);
 
+  // Simp/Trad toggle
+  $('#zh-toggle').addEventListener('click', (e) => {
+    const opt = e.target.closest('.zh-toggle-opt');
+    if (!opt) return;
+    zhMode = opt.dataset.mode;
+    $$('.zh-toggle-opt').forEach(o => o.classList.toggle('active', o.dataset.mode === zhMode));
+    renderTermRows(state.currentAnalysis?.terminology || []);
+  });
+
   // Hazard sort
   $('#hazard-sort').addEventListener('change', renderHazards);
 
@@ -528,6 +537,9 @@ function renderTab(tab) {
 // ===== TAB 1: TERMINOLOGY =====
 let termSortKey = 'difficulty';
 let termSortDir = -1;
+let zhMode = 'simplified'; // 'simplified' | 'traditional'
+const expandedTerms = new Set();
+let dismissedOpen = false;
 
 function renderTerminology(terms) {
   const domains = [...new Set(terms.map(t => t.domain).filter(Boolean))];
@@ -537,7 +549,7 @@ function renderTerminology(terms) {
   renderTermRows(terms);
 }
 
-function renderTermRows(terms) {
+function getFilteredTerms(terms) {
   const search = ($('#term-search').value || '').toLowerCase();
   const domain = $('#term-domain-filter').value;
   let filtered = terms;
@@ -557,16 +569,174 @@ function renderTermRows(terms) {
     if (typeof va === 'number') return (va - vb) * termSortDir;
     return String(va).localeCompare(String(vb)) * termSortDir;
   });
-  $('#term-tbody').innerHTML = filtered.map(t => `
-    <tr>
-      <td><strong>${esc(t.en)}</strong></td>
-      <td class="zh-cell">${esc(t.zh_simplified)}</td>
-      <td class="zh-cell">${esc(t.zh_traditional)}</td>
-      <td class="pinyin-cell">${esc(t.pinyin)}</td>
-      <td class="context-cell">${esc(t.context_note)}</td>
-      <td><span class="diff-badge diff-${t.difficulty||3}">${t.difficulty||3}</span></td>
-    </tr>
-  `).join('');
+  return filtered;
+}
+
+function buildTermRow(t, idx, isDismissed) {
+  const diff = t.difficulty ?? 3;
+  const zhText = zhMode === 'simplified' ? (t.zh_simplified || '') : (t.zh_traditional || '');
+  const isExpanded = expandedTerms.has(idx);
+  const expandCls = isExpanded ? 'term-row-expanded' : '';
+
+  let row = `<tr class="term-row ${expandCls}" data-idx="${idx}">
+    <td class="td-dismiss"><button class="term-dismiss-btn" data-idx="${idx}" title="Set to 0">&times;</button></td>
+    <td class="td-en" data-idx="${idx}"><span class="term-expand-chevron">${isExpanded ? '\u25BE' : '\u25B8'}</span> <strong>${esc(t.en)}</strong></td>
+    <td class="zh-cell">${esc(zhText)}</td>
+    <td class="td-diff">
+      <button class="diff-ctrl diff-minus" data-idx="${idx}">&minus;</button>
+      <span class="diff-badge diff-${diff} diff-clickable" data-idx="${idx}">${diff}</span>
+      <button class="diff-ctrl diff-plus" data-idx="${idx}">+</button>
+    </td>
+  </tr>`;
+
+  if (isExpanded) {
+    row += `<tr class="term-detail-row" data-idx="${idx}">
+      <td colspan="4">
+        <div class="term-detail-strip">
+          ${t.pinyin ? `<span class="term-detail-pinyin">${esc(t.pinyin)}</span>` : ''}
+          ${t.context_note ? `<span class="term-detail-context">${esc(t.context_note)}</span>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }
+  return row;
+}
+
+function renderTermRows(terms) {
+  const filtered = getFilteredTerms(terms);
+  const active = filtered.filter(t => (t.difficulty ?? 3) > 0);
+  const dismissed = filtered.filter(t => (t.difficulty ?? 3) === 0);
+
+  // Active terms
+  $('#term-tbody').innerHTML = active.map((t, i) => {
+    const realIdx = terms.indexOf(t);
+    return buildTermRow(t, realIdx, false);
+  }).join('');
+
+  // Dismissed section
+  const dismissedSection = $('#term-dismissed-section');
+  const dismissedCount = $('#term-dismissed-count');
+  const dismissedTbody = $('#term-dismissed-tbody');
+  if (dismissed.length > 0) {
+    dismissedSection.classList.remove('hidden');
+    dismissedCount.textContent = dismissed.length;
+    if (dismissedOpen) {
+      dismissedTbody.innerHTML = dismissed.map(t => {
+        const realIdx = terms.indexOf(t);
+        return buildTermRow(t, realIdx, true);
+      }).join('');
+      dismissedTbody.parentElement.classList.remove('hidden');
+    } else {
+      dismissedTbody.innerHTML = '';
+      dismissedTbody.parentElement.classList.add('hidden');
+    }
+  } else {
+    dismissedSection.classList.add('hidden');
+  }
+
+  // Bind events via delegation
+  bindTermEvents();
+}
+
+function bindTermEvents() {
+  // Use event delegation on the wrapper
+  const wrapper = $('#term-table-wrapper');
+  // Remove old listener and re-add (simple approach)
+  wrapper.onclick = (e) => {
+    const target = e.target;
+    const terms = state.currentAnalysis?.terminology || [];
+
+    // Dismiss button
+    if (target.classList.contains('term-dismiss-btn')) {
+      e.stopPropagation();
+      const idx = parseInt(target.dataset.idx);
+      if (terms[idx]) { terms[idx].difficulty = 0; renderTermRows(terms); }
+      return;
+    }
+
+    // Diff minus
+    if (target.classList.contains('diff-minus')) {
+      e.stopPropagation();
+      const idx = parseInt(target.dataset.idx);
+      if (terms[idx]) {
+        terms[idx].difficulty = Math.max(0, (terms[idx].difficulty ?? 3) - 1);
+        renderTermRows(terms);
+      }
+      return;
+    }
+
+    // Diff plus
+    if (target.classList.contains('diff-plus')) {
+      e.stopPropagation();
+      const idx = parseInt(target.dataset.idx);
+      if (terms[idx]) {
+        terms[idx].difficulty = Math.min(5, (terms[idx].difficulty ?? 3) + 1);
+        renderTermRows(terms);
+      }
+      return;
+    }
+
+    // Diff badge click — inline number selector
+    if (target.classList.contains('diff-clickable')) {
+      e.stopPropagation();
+      const idx = parseInt(target.dataset.idx);
+      const rect = target.getBoundingClientRect();
+      showDiffPicker(idx, rect);
+      return;
+    }
+
+    // Row expand/collapse — click on English cell or chevron
+    const enCell = target.closest('.td-en');
+    if (enCell) {
+      const idx = parseInt(enCell.dataset.idx);
+      if (expandedTerms.has(idx)) expandedTerms.delete(idx);
+      else expandedTerms.add(idx);
+      renderTermRows(terms);
+      return;
+    }
+
+    // Dismissed toggle
+    if (target.closest('#term-dismissed-toggle')) {
+      dismissedOpen = !dismissedOpen;
+      renderTermRows(terms);
+      return;
+    }
+  };
+}
+
+function showDiffPicker(idx, anchorRect) {
+  // Remove existing picker
+  const existing = document.querySelector('.diff-picker');
+  if (existing) existing.remove();
+
+  const picker = document.createElement('div');
+  picker.className = 'diff-picker';
+  picker.innerHTML = [0,1,2,3,4,5].map(n =>
+    `<button class="diff-pick-btn diff-${n}" data-val="${n}">${n}</button>`
+  ).join('');
+  document.body.appendChild(picker);
+
+  // Position near the badge
+  picker.style.position = 'fixed';
+  picker.style.left = (anchorRect.left - 20) + 'px';
+  picker.style.top = (anchorRect.bottom + 4) + 'px';
+  picker.style.zIndex = '9999';
+
+  picker.addEventListener('click', (e) => {
+    const btn = e.target.closest('.diff-pick-btn');
+    if (btn) {
+      const val = parseInt(btn.dataset.val);
+      const terms = state.currentAnalysis?.terminology || [];
+      if (terms[idx]) { terms[idx].difficulty = val; renderTermRows(terms); }
+    }
+    picker.remove();
+  });
+
+  // Close on outside click
+  setTimeout(() => {
+    const close = (e) => { if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', close); } };
+    document.addEventListener('click', close);
+  }, 50);
 }
 
 function sortTermTable(key) {

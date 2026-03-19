@@ -156,19 +156,28 @@
             <button id="term-export" class="btn-small">Export TSV</button>
           </div>
           <div id="term-table-wrapper" class="table-wrapper">
-            <table id="term-table" class="data-table">
+            <table id="term-table" class="data-table term-table">
               <thead>
                 <tr>
+                  <th class="th-dismiss" style="width:32px"></th>
                   <th class="sortable" data-sort="en">English</th>
-                  <th class="sortable" data-sort="zh_simplified">&#31616;&#20307;</th>
-                  <th class="sortable" data-sort="zh_traditional">&#32321;&#39636;</th>
-                  <th>Pinyin</th>
-                  <th>Context</th>
+                  <th id="zh-toggle-header">
+                    <span class="zh-toggle" id="zh-toggle">
+                      <span class="zh-toggle-opt active" data-mode="simplified">Simp</span>
+                      <span class="zh-toggle-opt" data-mode="traditional">Trad</span>
+                    </span>
+                  </th>
                   <th class="sortable" data-sort="difficulty">Diff</th>
                 </tr>
               </thead>
               <tbody id="term-tbody"></tbody>
             </table>
+            <div id="term-dismissed-section" class="term-dismissed-section hidden">
+              <button id="term-dismissed-toggle" class="term-dismissed-header">Dismissed (<span id="term-dismissed-count">0</span>)</button>
+              <table class="data-table term-table">
+                <tbody id="term-dismissed-tbody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
 
