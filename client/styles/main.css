@@ -596,12 +596,13 @@ body {
   position: relative;
   width: 100%;
   height: 100%;
-  background: var(--surface);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-light);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
   background-color: var(--surface);
+  background-image: radial-gradient(circle, rgba(0,0,0,0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
 .mindmap-container svg {
@@ -629,12 +630,14 @@ body {
   bottom: 16px;
   right: 16px;
   display: flex;
-  gap: 4px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  gap: 2px;
+  background: rgba(255,255,255,0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.5);
+  border-radius: 10px;
   padding: 4px;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
   z-index: 10;
 }
 .mm-ctrl {
@@ -658,17 +661,22 @@ body {
   color: var(--primary);
 }
 
-/* Detail Panel (overlay) */
+/* Detail Panel (frosted glass overlay) */
 .mindmap-detail-panel {
   position: absolute;
   top: 16px;
   right: 16px;
   width: 320px;
   max-height: calc(100% - 80px);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.05),
+    0 10px 15px -3px rgba(0, 0, 0, 0.06),
+    0 20px 25px -5px rgba(0, 0, 0, 0.04);
   overflow-y: auto;
   z-index: 20;
   animation: slideInRight 0.25s ease-out;
@@ -685,9 +693,9 @@ body {
   align-items: center;
   gap: 8px;
   padding: 14px 18px;
-  border-bottom: 1px solid var(--border-light);
-  background: var(--surface-2);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  background: rgba(0,0,0,0.02);
+  border-radius: 16px 16px 0 0;
 }
 .mm-detail-icon { font-size: 18px; }
 .mm-detail-title {
@@ -748,7 +756,7 @@ body {
 }
 .mm-detail-tag {
   display: inline-block;
-  padding: 2px 10px;
+  padding: 3px 12px;
   background: var(--primary-light);
   border-radius: 20px;
   font-size: 11px;
@@ -756,6 +764,57 @@ body {
   color: var(--primary-dark);
   margin: 2px 4px 2px 0;
 }
+.mm-detail-tag em { font-weight: 400; font-style: normal; opacity: 0.7; }
+
+/* Edge hover tooltip */
+.mm-tooltip {
+  position: absolute;
+  z-index: 30;
+  background: rgba(30, 30, 40, 0.9);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--font);
+  padding: 5px 10px;
+  border-radius: 6px;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  letter-spacing: 0.1px;
+  transition: opacity 0.15s;
+}
+.mm-tooltip.hidden { opacity: 0; display: none; }
+
+/* Edge label pills */
+.mm-edge-label { pointer-events: none; }
+.mm-edge { transition: stroke-opacity 0.2s ease, stroke-width 0.2s ease; }
+
+/* Sight Translation Self-Assessment */
+.sight-assessment { margin-top: 20px; }
+.sight-assessment h4 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+.sight-checklist { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.sight-check-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; background: var(--surface);
+  border: 1.5px solid var(--border); border-radius: var(--radius);
+  cursor: pointer; transition: all var(--transition); font-size: 13px;
+}
+.sight-check-item:hover { border-color: var(--primary); background: var(--primary-light); }
+.sight-check-item.checked { border-color: var(--success); background: var(--success-light); }
+.sight-check-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--success); }
+.sight-term-en { font-weight: 600; }
+.sight-term-arrow { color: var(--text-3); }
+.sight-term-zh { font-size: 15px; }
+.sight-confidence { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.sight-confidence label { font-size: 13px; font-weight: 600; color: var(--text-2); }
+.sight-rating { display: flex; gap: 4px; }
+.sight-star {
+  width: 32px; height: 32px; border-radius: 8px; border: 1.5px solid var(--border);
+  background: var(--surface); font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: all var(--transition); color: var(--text-3);
+}
+.sight-star:hover, .sight-star.active { background: var(--primary); color: white; border-color: var(--primary); }
 
 /* Industry tab overview */
 .industry-overview {

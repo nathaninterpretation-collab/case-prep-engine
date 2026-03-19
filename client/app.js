@@ -227,10 +227,12 @@ function bindEvents() {
   // Quiz
   $('#quiz-mcq-btn').addEventListener('click', startMCQ);
   $('#quiz-sight-btn').addEventListener('click', startSight);
+  $('#quiz-context-btn').addEventListener('click', startContextQuiz);
   $('#quiz-retry-btn').addEventListener('click', startMCQ);
   $('#quiz-back-btn').addEventListener('click', showQuizSetup);
-  $('#sight-record-btn').addEventListener('click', toggleRecording);
+  $('#sight-done-btn').addEventListener('click', showSightAssessment);
   $('#sight-next-btn').addEventListener('click', startSight);
+  $('#sight-submit-btn').addEventListener('click', submitSightAssessment);
 }
 
 // ===== FILE HANDLING =====
@@ -559,6 +561,11 @@ class MindMapRenderer {
     this.container.innerHTML = '';
     this.container.classList.add('mindmap-container');
 
+    // Tooltip
+    this.tooltip = document.createElement('div');
+    this.tooltip.className = 'mm-tooltip hidden';
+    this.container.appendChild(this.tooltip);
+
     // SVG
     this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     this.svg.setAttribute('width', '100%');
@@ -566,12 +573,30 @@ class MindMapRenderer {
     this.svg.style.cursor = 'grab';
     this.container.appendChild(this.svg);
 
-    // Defs for arrowheads
+    // Defs: gradients, filters, markers
     const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
     defs.innerHTML = `
-      <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text-3)" opacity="0.5"/>
+      <marker id="mm-arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--text-3)" opacity="0.4"/>
       </marker>
+      <filter id="mm-shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.06"/>
+        <feDropShadow dx="0" dy="4" stdDeviation="8" flood-opacity="0.04"/>
+      </filter>
+      <filter id="mm-shadow-hover" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="2" stdDeviation="4" flood-opacity="0.1"/>
+        <feDropShadow dx="0" dy="8" stdDeviation="16" flood-opacity="0.06"/>
+      </filter>
+      <linearGradient id="grad-date" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F0F4FF"/><stop offset="100%" stop-color="#E4EAFB"/></linearGradient>
+      <linearGradient id="grad-location" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#EEFAF2"/><stop offset="100%" stop-color="#DEF2E5"/></linearGradient>
+      <linearGradient id="grad-person" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFF9F0"/><stop offset="100%" stop-color="#F8EDDA"/></linearGradient>
+      <linearGradient id="grad-document" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F5F7FA"/><stop offset="100%" stop-color="#EAECF0"/></linearGradient>
+      <linearGradient id="grad-amount" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FDF3F1"/><stop offset="100%" stop-color="#F5E4E1"/></linearGradient>
+      <linearGradient id="grad-event" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F6F2FD"/><stop offset="100%" stop-color="#EBE2F6"/></linearGradient>
+      <linearGradient id="grad-default" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FAFBFC"/><stop offset="100%" stop-color="#F0F2F5"/></linearGradient>
+      <linearGradient id="grad-primary" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#EEF2FF"/><stop offset="100%" stop-color="#DBEAFE"/></linearGradient>
+      <linearGradient id="grad-coa" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFFBEB"/><stop offset="100%" stop-color="#FEF3C7"/></linearGradient>
+      <linearGradient id="grad-term" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FAF5FF"/><stop offset="100%" stop-color="#F0E8FA"/></linearGradient>
     `;
     this.svg.appendChild(defs);
 
@@ -725,157 +750,256 @@ class MindMapRenderer {
     this.edgeGroup.innerHTML = '';
     this.nodeGroup.innerHTML = '';
     this.labelGroup.innerHTML = '';
+    const NS = 'http://www.w3.org/2000/svg';
+    const self = this;
 
-    // Draw edges
-    for (const edge of this.edges) {
+    // ── EDGES ──
+    for (let ei = 0; ei < this.edges.length; ei++) {
+      const edge = this.edges[ei];
       const from = this.nodes.find(n => n.id === edge.from);
       const to = this.nodes.find(n => n.id === edge.to);
       if (!from || !to) continue;
 
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       const dx = to.x - from.x;
       const dy = to.y - from.y;
-      // Curved path
-      const cx1 = from.x + dx * 0.4;
-      const cy1 = from.y;
-      const cx2 = from.x + dx * 0.6;
-      const cy2 = to.y;
-      path.setAttribute('d', `M${from.x},${from.y} C${cx1},${cy1} ${cx2},${cy2} ${to.x},${to.y}`);
+      const cx1 = from.x + dx * 0.35;
+      const cy1 = from.y + dy * 0.1;
+      const cx2 = from.x + dx * 0.65;
+      const cy2 = to.y - dy * 0.1;
+      const d = `M${from.x},${from.y} C${cx1},${cy1} ${cx2},${cy2} ${to.x},${to.y}`;
+
+      // Invisible hit area for hover
+      const hitArea = document.createElementNS(NS, 'path');
+      hitArea.setAttribute('d', d);
+      hitArea.setAttribute('fill', 'none');
+      hitArea.setAttribute('stroke', 'transparent');
+      hitArea.setAttribute('stroke-width', '16');
+      hitArea.style.cursor = edge.label ? 'pointer' : 'default';
+      this.edgeGroup.appendChild(hitArea);
+
+      // Visible edge
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', d);
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', edge.color || 'var(--border)');
-      path.setAttribute('stroke-width', edge.width || 2);
-      path.setAttribute('stroke-opacity', '0.5');
-      path.setAttribute('marker-end', 'url(#arrow)');
+      path.setAttribute('stroke-width', edge.width || 1.5);
+      path.setAttribute('stroke-opacity', '0.3');
+      path.setAttribute('stroke-linecap', 'round');
+      if (!edge.noArrow) path.setAttribute('marker-end', 'url(#mm-arrow)');
       path.classList.add('mm-edge');
       if (edge.dashed) path.setAttribute('stroke-dasharray', '6,4');
       this.edgeGroup.appendChild(path);
 
-      // Edge label
+      // Edge label with background pill
+      const midX = (from.x + to.x) / 2;
+      const midY = (from.y + to.y) / 2;
+      let labelGroup = null;
       if (edge.label) {
-        const midX = (from.x + to.x) / 2;
-        const midY = (from.y + to.y) / 2 - 8;
-        const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        labelGroup = document.createElementNS(NS, 'g');
+        labelGroup.classList.add('mm-edge-label');
+        const pill = document.createElementNS(NS, 'rect');
+        const txt = document.createElementNS(NS, 'text');
         txt.setAttribute('x', midX);
-        txt.setAttribute('y', midY);
+        txt.setAttribute('y', midY + 3);
         txt.setAttribute('text-anchor', 'middle');
-        txt.setAttribute('fill', 'var(--text-3)');
-        txt.setAttribute('font-size', '10');
+        txt.setAttribute('fill', 'var(--text-2)');
+        txt.setAttribute('font-size', '9');
         txt.setAttribute('font-weight', '500');
-        txt.textContent = edge.label;
-        this.labelGroup.appendChild(txt);
+        txt.setAttribute('font-family', "'Inter', var(--font)");
+        txt.setAttribute('letter-spacing', '0.2');
+        const truncLabel = edge.label.length > 20 ? edge.label.slice(0, 18) + '...' : edge.label;
+        txt.textContent = truncLabel;
+        // Pill background sized to text
+        const pw = Math.max(40, truncLabel.length * 5.5 + 12);
+        pill.setAttribute('x', midX - pw / 2);
+        pill.setAttribute('y', midY - 8);
+        pill.setAttribute('width', pw);
+        pill.setAttribute('height', 16);
+        pill.setAttribute('rx', 8);
+        pill.setAttribute('fill', 'var(--surface)');
+        pill.setAttribute('stroke', 'var(--border-light)');
+        pill.setAttribute('stroke-width', '0.5');
+        pill.setAttribute('opacity', '0.92');
+        labelGroup.appendChild(pill);
+        labelGroup.appendChild(txt);
+        this.labelGroup.appendChild(labelGroup);
       }
+
+      // Edge hover interactions
+      const onEnter = (e) => {
+        path.setAttribute('stroke-opacity', '0.7');
+        path.setAttribute('stroke-width', (edge.width || 1.5) + 1);
+        if (edge.label) {
+          self.tooltip.textContent = edge.label;
+          self.tooltip.classList.remove('hidden');
+          const cr = self.container.getBoundingClientRect();
+          const svgPt = self.svg.getBoundingClientRect();
+          self.tooltip.style.left = (e.clientX - cr.left + 12) + 'px';
+          self.tooltip.style.top = (e.clientY - cr.top - 28) + 'px';
+        }
+      };
+      const onLeave = () => {
+        path.setAttribute('stroke-opacity', '0.3');
+        path.setAttribute('stroke-width', edge.width || 1.5);
+        self.tooltip.classList.add('hidden');
+      };
+      hitArea.addEventListener('mouseenter', onEnter);
+      hitArea.addEventListener('mousemove', (e) => {
+        if (!self.tooltip.classList.contains('hidden')) {
+          const cr = self.container.getBoundingClientRect();
+          self.tooltip.style.left = (e.clientX - cr.left + 12) + 'px';
+          self.tooltip.style.top = (e.clientY - cr.top - 28) + 'px';
+        }
+      });
+      hitArea.addEventListener('mouseleave', onLeave);
     }
 
-    // Draw nodes
-    for (const node of this.nodes) {
-      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    // ── NODES ──
+    for (let ni = 0; ni < this.nodes.length; ni++) {
+      const node = this.nodes[ni];
+      const g = document.createElementNS(NS, 'g');
       g.setAttribute('transform', `translate(${node.x},${node.y})`);
       g.classList.add('mm-node');
       g.style.cursor = 'pointer';
+      g.style.opacity = '0';
+      g.style.transition = `opacity 0.4s ease ${ni * 25}ms, transform 0.15s ease`;
 
       const isExpanded = this.expandedNodes.has(node.id);
-      const w = node.width || (node.tier === 0 ? 180 : node.tier === 1 ? 160 : 140);
-      const h = node.height || (node.tier === 0 ? 56 : node.tier === 1 ? 44 : 36);
-      const rx = node.tier === 0 ? 16 : 10;
+      const w = node.width || (node.tier === 0 ? 190 : node.tier === 1 ? 165 : 145);
+      const h = node.height || (node.tier === 0 ? 54 : node.tier === 1 ? 44 : 36);
+      const rx = node.tier === 0 ? 14 : node.tier === 1 ? 12 : 10;
 
-      // Background rect
-      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      // Gradient fill ID
+      const gradId = node.gradientId || 'grad-default';
+
+      // Main rect with shadow filter
+      const rect = document.createElementNS(NS, 'rect');
       rect.setAttribute('x', -w / 2);
       rect.setAttribute('y', -h / 2);
       rect.setAttribute('width', w);
       rect.setAttribute('height', h);
       rect.setAttribute('rx', rx);
-      rect.setAttribute('fill', node.fill || 'var(--surface)');
-      rect.setAttribute('stroke', isExpanded ? 'var(--primary)' : (node.stroke || 'var(--border)'));
-      rect.setAttribute('stroke-width', isExpanded ? 2.5 : 1.5);
-      // no SVG filter — CSS handles shadows
+      rect.setAttribute('fill', `url(#${gradId})`);
+      rect.setAttribute('stroke', isExpanded ? 'var(--primary)' : (node.stroke || '#D1D5DB'));
+      rect.setAttribute('stroke-width', isExpanded ? 2 : 1);
+      rect.setAttribute('filter', 'url(#mm-shadow)');
       g.appendChild(rect);
+
+      // Top highlight (glass reflection)
+      const highlight = document.createElementNS(NS, 'rect');
+      highlight.setAttribute('x', -w / 2 + 1);
+      highlight.setAttribute('y', -h / 2 + 1);
+      highlight.setAttribute('width', w - 2);
+      highlight.setAttribute('height', h * 0.45);
+      highlight.setAttribute('rx', rx - 1);
+      highlight.setAttribute('fill', 'white');
+      highlight.setAttribute('opacity', '0.12');
+      highlight.setAttribute('pointer-events', 'none');
+      g.appendChild(highlight);
 
       // Accent bar for tier-0
       if (node.tier === 0 && node.accentColor) {
-        const accent = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        const accent = document.createElementNS(NS, 'rect');
         accent.setAttribute('x', -w / 2);
-        accent.setAttribute('y', -h / 2);
-        accent.setAttribute('width', 5);
-        accent.setAttribute('height', h);
-        accent.setAttribute('rx', '3');
+        accent.setAttribute('y', -h / 2 + 4);
+        accent.setAttribute('width', 3);
+        accent.setAttribute('height', h - 8);
+        accent.setAttribute('rx', '1.5');
         accent.setAttribute('fill', node.accentColor);
         g.appendChild(accent);
       }
 
       // Icon
       if (node.icon) {
-        const iconTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        iconTxt.setAttribute('x', -w / 2 + (node.tier === 0 ? 18 : 14));
+        const iconTxt = document.createElementNS(NS, 'text');
+        iconTxt.setAttribute('x', -w / 2 + (node.tier === 0 ? 16 : 13));
         iconTxt.setAttribute('y', 5);
-        iconTxt.setAttribute('font-size', node.tier === 0 ? '18' : '14');
+        iconTxt.setAttribute('font-size', node.tier === 0 ? '16' : '13');
         iconTxt.setAttribute('text-anchor', 'middle');
+        iconTxt.setAttribute('pointer-events', 'none');
         iconTxt.textContent = node.icon;
         g.appendChild(iconTxt);
       }
 
       // Label
-      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      const labelX = node.icon ? -w / 2 + (node.tier === 0 ? 34 : 26) : 0;
+      const label = document.createElementNS(NS, 'text');
+      const labelX = node.icon ? -w / 2 + (node.tier === 0 ? 30 : 24) : 0;
       label.setAttribute('x', labelX);
-      label.setAttribute('y', node.sublabel ? -2 : 5);
+      label.setAttribute('y', node.sublabel ? -3 : 4);
       label.setAttribute('text-anchor', node.icon ? 'start' : 'middle');
       label.setAttribute('fill', node.textColor || 'var(--text)');
-      label.setAttribute('font-size', node.tier === 0 ? '13' : node.tier === 1 ? '12' : '11');
-      label.setAttribute('font-weight', node.tier <= 1 ? '700' : '500');
-      label.setAttribute('font-family', 'var(--font)');
-      // Truncate label
-      const maxChars = Math.floor(w / (node.tier === 0 ? 8 : 7));
-      label.textContent = node.label.length > maxChars ? node.label.slice(0, maxChars - 1) + '...' : node.label;
+      label.setAttribute('font-size', node.tier === 0 ? '12.5' : node.tier === 1 ? '11.5' : '10.5');
+      label.setAttribute('font-weight', node.tier === 0 ? '700' : node.tier === 1 ? '600' : '500');
+      label.setAttribute('font-family', "'Inter', var(--font)");
+      label.setAttribute('letter-spacing', '-0.2');
+      label.setAttribute('pointer-events', 'none');
+      const maxChars = Math.floor((w - (node.icon ? 40 : 16)) / (node.tier === 0 ? 7 : 6.2));
+      label.textContent = node.label.length > maxChars ? node.label.slice(0, maxChars - 1) + '\u2026' : node.label;
       g.appendChild(label);
 
       // Sublabel
       if (node.sublabel) {
-        const sub = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        const sub = document.createElementNS(NS, 'text');
         sub.setAttribute('x', labelX);
-        sub.setAttribute('y', 14);
+        sub.setAttribute('y', 12);
         sub.setAttribute('text-anchor', node.icon ? 'start' : 'middle');
         sub.setAttribute('fill', 'var(--text-3)');
-        sub.setAttribute('font-size', '10');
-        sub.setAttribute('font-family', 'var(--font)');
-        const subMax = Math.floor(w / 6);
-        sub.textContent = node.sublabel.length > subMax ? node.sublabel.slice(0, subMax - 1) + '...' : node.sublabel;
+        sub.setAttribute('font-size', '9');
+        sub.setAttribute('font-weight', '500');
+        sub.setAttribute('font-family', "'Inter', var(--font)");
+        sub.setAttribute('letter-spacing', '0.3');
+        sub.setAttribute('text-transform', 'uppercase');
+        sub.setAttribute('pointer-events', 'none');
+        const subMax = Math.floor(w / 5.5);
+        sub.textContent = node.sublabel.length > subMax ? node.sublabel.slice(0, subMax - 1) + '\u2026' : node.sublabel;
         g.appendChild(sub);
       }
 
       // Expand indicator
-      if (node.detail || node.children?.length) {
-        const indicator = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        indicator.setAttribute('x', w / 2 - 14);
-        indicator.setAttribute('y', 5);
-        indicator.setAttribute('font-size', '12');
-        indicator.setAttribute('fill', 'var(--text-3)');
-        indicator.setAttribute('text-anchor', 'middle');
-        indicator.textContent = isExpanded ? '−' : '+';
-        g.appendChild(indicator);
+      if (node.detail || node.detailHtml || node.children?.length) {
+        const ind = document.createElementNS(NS, 'circle');
+        ind.setAttribute('cx', w / 2 - 12);
+        ind.setAttribute('cy', 0);
+        ind.setAttribute('r', 8);
+        ind.setAttribute('fill', isExpanded ? 'var(--primary)' : 'var(--surface-2)');
+        ind.setAttribute('stroke', isExpanded ? 'var(--primary)' : 'var(--border)');
+        ind.setAttribute('stroke-width', '0.5');
+        g.appendChild(ind);
+        const indTxt = document.createElementNS(NS, 'text');
+        indTxt.setAttribute('x', w / 2 - 12);
+        indTxt.setAttribute('y', 3.5);
+        indTxt.setAttribute('text-anchor', 'middle');
+        indTxt.setAttribute('font-size', '10');
+        indTxt.setAttribute('font-weight', '700');
+        indTxt.setAttribute('fill', isExpanded ? 'white' : 'var(--text-3)');
+        indTxt.setAttribute('pointer-events', 'none');
+        indTxt.textContent = isExpanded ? '\u2212' : '+';
+        g.appendChild(indTxt);
       }
 
-      // Click handler
-      g.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this._onNodeClick(node);
-      });
+      // Click
+      g.addEventListener('click', (e) => { e.stopPropagation(); this._onNodeClick(node); });
 
       // Hover
       g.addEventListener('mouseenter', () => {
-        rect.setAttribute('stroke', 'var(--primary)');
-        rect.setAttribute('stroke-width', '2.5');
-        // glow handled by stroke
+        rect.setAttribute('filter', 'url(#mm-shadow-hover)');
+        rect.setAttribute('stroke', node.accentColor || 'var(--primary)');
+        rect.setAttribute('stroke-width', '1.5');
+        g.style.transform = `translate(${node.x}px,${node.y}px) scale(1.03)`;
       });
       g.addEventListener('mouseleave', () => {
         if (!this.expandedNodes.has(node.id)) {
-          rect.setAttribute('stroke', node.stroke || 'var(--border)');
-          rect.setAttribute('stroke-width', '1.5');
+          rect.setAttribute('filter', 'url(#mm-shadow)');
+          rect.setAttribute('stroke', node.stroke || '#D1D5DB');
+          rect.setAttribute('stroke-width', '1');
         }
-        // reset hover
+        g.style.transform = '';
       });
 
       this.nodeGroup.appendChild(g);
+
+      // Staggered entrance
+      requestAnimationFrame(() => { g.style.opacity = '1'; });
     }
   }
 
@@ -959,12 +1083,12 @@ function renderContext(nodes) {
   if (!nodes.length) { c.innerHTML = '<p class="tab-empty">No context nodes generated.</p>'; return; }
 
   const typeColors = {
-    date: { fill: '#eff6ff', stroke: '#3b82f6', accent: '#3b82f6', icon: '\uD83D\uDCC5' },
-    location: { fill: '#f0fdf4', stroke: '#22c55e', accent: '#22c55e', icon: '\uD83D\uDCCD' },
-    person: { fill: '#fffbeb', stroke: '#f59e0b', accent: '#f59e0b', icon: '\uD83D\uDC64' },
-    document: { fill: '#f8fafc', stroke: '#94a3b8', accent: '#94a3b8', icon: '\uD83D\uDCC4' },
-    amount: { fill: '#fef2f2', stroke: '#ef4444', accent: '#ef4444', icon: '\uD83D\uDCB0' },
-    event: { fill: '#faf5ff', stroke: '#8b5cf6', accent: '#8b5cf6', icon: '\u26A1' },
+    date: { gradientId: 'grad-date', stroke: '#6B8ACA', accent: '#5B7BBD', icon: '\uD83D\uDCC5' },
+    location: { gradientId: 'grad-location', stroke: '#5BA07A', accent: '#4A9068', icon: '\uD83D\uDCCD' },
+    person: { gradientId: 'grad-person', stroke: '#C4944A', accent: '#B5853D', icon: '\uD83D\uDC64' },
+    document: { gradientId: 'grad-document', stroke: '#8893A3', accent: '#788394', icon: '\uD83D\uDCC4' },
+    amount: { gradientId: 'grad-amount', stroke: '#C46B5E', accent: '#B55C50', icon: '\uD83D\uDCB0' },
+    event: { gradientId: 'grad-event', stroke: '#8B6BBF', accent: '#7C5CB0', icon: '\u26A1' },
   };
 
   const mmNodes = [];
@@ -1010,7 +1134,7 @@ function renderContext(nodes) {
         label: n.label,
         sublabel: n.type,
         icon: colors.icon,
-        fill: colors.fill,
+        gradientId: colors.gradientId,
         stroke: colors.stroke,
         accentColor: colors.accent,
         tier: 1,
@@ -1028,9 +1152,11 @@ function renderContext(nodes) {
           </div>
           ${n.connections?.length ? `<div class="mm-detail-section">
             <div class="mm-detail-label">Connected To</div>
-            <div>${n.connections.map(cid => {
+            <div>${n.connections.map(conn => {
+              const cid = typeof conn === 'string' ? conn : conn.target_id;
+              const clabel = typeof conn === 'object' ? conn.label : '';
               const t = nodes.find(nn => nn.id === cid);
-              return `<span class="mm-detail-tag">${t ? esc(t.label) : cid}</span>`;
+              return `<span class="mm-detail-tag">${t ? esc(t.label) : cid}${clabel ? ` <em>(${esc(clabel)})</em>` : ''}</span>`;
             }).join(' ')}</div>
           </div>` : ''}
         `
@@ -1041,15 +1167,19 @@ function renderContext(nodes) {
   // Resolve any remaining overlaps
   resolveOverlaps(mmNodes, 24, 16);
 
-  // Build edges
+  // Build edges (supports both old string[] and new {target_id, label}[] formats)
   nodes.forEach(n => {
-    (n.connections || []).forEach(targetId => {
+    (n.connections || []).forEach(conn => {
+      const targetId = typeof conn === 'string' ? conn : conn.target_id;
+      const label = typeof conn === 'object' ? conn.label : null;
       if (nodes.find(nn => nn.id === targetId)) {
         mmEdges.push({
           from: n.id,
           to: targetId,
           color: (typeColors[n.type] || typeColors.event).stroke,
-          width: 1.5
+          width: 1.5,
+          label: label || null,
+          noArrow: true
         });
       }
     });
@@ -1097,7 +1227,7 @@ function renderLegalTheory(theory) {
     id: rootId, x: rootX, y: 50,
     label: 'Legal Theory',
     icon: '\u2696\uFE0F',
-    fill: 'var(--primary-light)', stroke: 'var(--primary)', accentColor: 'var(--primary)',
+    gradientId: 'grad-primary', stroke: '#6B8ACA', accentColor: 'var(--primary)',
     tier: 0, width: 200, height: 56, textColor: 'var(--primary-dark)'
   });
 
@@ -1111,14 +1241,14 @@ function renderLegalTheory(theory) {
     mmNodes.push({
       id: coaId, x: coaCenterX, y: coaY,
       label: ca.name, icon: '\uD83D\uDCCB',
-      fill: '#fef3c7', stroke: '#f59e0b', accentColor: '#f59e0b',
+      gradientId: 'grad-coa', stroke: '#C4944A', accentColor: '#B5853D',
       tier: 0, width: Math.min(300, Math.max(200, ca.name.length * 8 + 40)), height: 52,
       detailHtml: `
         <div class="mm-detail-section"><div class="mm-detail-label">Plaintiff Strategy</div><div>${esc(ca.plaintiff_angle || '')}</div></div>
         <div class="mm-detail-section"><div class="mm-detail-label">Defense Strategy</div><div>${esc(ca.defendant_angle || '')}</div></div>
       `
     });
-    mmEdges.push({ from: rootId, to: coaId, color: 'var(--primary)', width: 2.5 });
+    mmEdges.push({ from: rootId, to: coaId, color: '#6B8ACA', width: 2, label: 'cause of action' });
 
     // Branches laid out as columns under this COA
     const branches = branchDefs.map(b => {
@@ -1138,14 +1268,14 @@ function renderLegalTheory(theory) {
         id: branchId, x: bx, y: branchY,
         label: `${branch.label} (${branch.items.length})`,
         icon: branch.icon,
-        fill: 'var(--surface)', stroke: branch.color,
+        gradientId: 'grad-default', stroke: branch.color,
         tier: 1, width: 155, height: 40,
         detailHtml: `<div class="mm-detail-section">
           <div class="mm-detail-label">${esc(branch.label)}</div>
           <ul class="mm-detail-list">${branch.items.map(item => `<li>${esc(item)}</li>`).join('')}</ul>
         </div>`
       });
-      mmEdges.push({ from: coaId, to: branchId, color: branch.color, width: 1.5 });
+      mmEdges.push({ from: coaId, to: branchId, color: branch.color, width: 1.5, label: branch.label.toLowerCase() });
 
       // Leaf nodes — stack vertically under branch, no overlap
       const maxLeaves = Math.min(4, branch.items.length);
@@ -1156,7 +1286,7 @@ function renderLegalTheory(theory) {
         mmNodes.push({
           id: leafId, x: bx, y: ly,
           label: item.length > 25 ? item.slice(0, 23) + '...' : item,
-          fill: 'var(--surface-2)', stroke: branch.color,
+          gradientId: 'grad-default', stroke: branch.color,
           tier: 2, width: 150, height: 32,
           detail: item
         });
@@ -1202,7 +1332,7 @@ function renderIndustry(knowledge) {
   mmNodes.push({
     id: 'domain-root', x: STEP_X, y: ROOT_Y,
     label: knowledge.domain, icon: '\uD83C\uDFED',
-    fill: 'var(--primary-light)', stroke: 'var(--primary)', accentColor: 'var(--primary)',
+    gradientId: 'grad-primary', stroke: '#6B8ACA', accentColor: 'var(--primary)',
     tier: 0, width: 240, height: 52, textColor: 'var(--primary-dark)'
   });
 
@@ -1219,7 +1349,7 @@ function renderIndustry(knowledge) {
       id: stepId, x: STEP_X, y: curY,
       label: s.step, sublabel: `Step ${si + 1}`,
       icon: '\u25B6',
-      fill: 'var(--surface)', stroke: color, accentColor: color,
+      gradientId: 'grad-default', stroke: color, accentColor: color,
       tier: 0, width: 230, height: 52,
       detailHtml: `<div class="mm-detail-section"><div class="mm-detail-label">Description</div><div>${esc(s.description)}</div></div>`
     });
@@ -1243,7 +1373,7 @@ function renderIndustry(knowledge) {
         y: curY - (termRows - 1) * TERM_ROW_H / 2 + row * TERM_ROW_H,
         label: t.en,
         sublabel: t.zh_simplified || t.zh_traditional || '',
-        fill: '#faf5ff', stroke: color,
+        gradientId: 'grad-term', stroke: color,
         tier: 2, width: 155, height: 38,
         detailHtml: `
           <div class="mm-detail-section">
@@ -1582,7 +1712,7 @@ function finishQuiz() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       caseId: state.currentCaseId,
-      mode: 'mcq',
+      mode: qs.mode || 'mcq',
       score: qs.totalPoints,
       total: total,
       details: {
@@ -1597,6 +1727,99 @@ function finishQuiz() {
   }).catch(console.error);
 }
 
+// ===== CONTEXT QUIZ =====
+function startContextQuiz() {
+  const nodes = state.currentAnalysis?.context_nodes || [];
+  if (nodes.length < 4) { alert('Not enough context nodes for a quiz.'); return; }
+
+  const questions = generateContextQuestions(nodes);
+  if (questions.length === 0) { alert('Could not generate context questions.'); return; }
+
+  $('#quiz-setup').classList.add('hidden');
+  $('#quiz-results').classList.add('hidden');
+  $('#sight-active').classList.add('hidden');
+  $('#quiz-active').classList.remove('hidden');
+
+  state.quizState = {
+    questions, current: 0, correctCount: 0, streak: 0, maxStreak: 0,
+    totalPoints: 0, totalSpeedPts: 0, totalStreakPts: 0, totalAccPts: 0,
+    answers: [], timer: null, countdownRAF: null, questionStartTime: 0,
+    mode: 'context'
+  };
+  showQuestion();
+}
+
+function generateContextQuestions(nodes, count = 20) {
+  const questions = [];
+  const shuffle = arr => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+  // Type identification questions
+  nodes.forEach(n => {
+    const types = ['date', 'location', 'person', 'document', 'amount', 'event'];
+    const others = shuffle(types.filter(t => t !== n.type)).slice(0, 3);
+    questions.push({
+      question: `What type of context element is "${n.label}"?`,
+      direction: 'Context',
+      options: shuffle([n.type, ...others]),
+      correct: n.type,
+      difficulty: 2
+    });
+  });
+
+  // Detail recall questions
+  nodes.filter(n => n.detail).forEach(n => {
+    const otherDetails = shuffle(nodes.filter(nn => nn.id !== n.id && nn.detail).map(nn => nn.detail)).slice(0, 3);
+    if (otherDetails.length >= 3) {
+      questions.push({
+        question: `What is "${n.label}"?`,
+        direction: 'Context',
+        options: shuffle([n.detail, ...otherDetails]),
+        correct: n.detail,
+        difficulty: 3
+      });
+    }
+  });
+
+  // Connection questions (if labeled connections exist)
+  nodes.forEach(n => {
+    (n.connections || []).forEach(conn => {
+      if (typeof conn !== 'object' || !conn.label) return;
+      const target = nodes.find(nn => nn.id === conn.target_id);
+      if (!target) return;
+      const otherLabels = shuffle(
+        nodes.flatMap(nn => (nn.connections || [])
+          .filter(c => typeof c === 'object' && c.label && c.label !== conn.label)
+          .map(c => c.label))
+      ).filter((v, i, a) => a.indexOf(v) === i).slice(0, 3);
+      if (otherLabels.length >= 3) {
+        questions.push({
+          question: `What is the relationship between "${n.label}" and "${target.label}"?`,
+          direction: 'Context',
+          options: shuffle([conn.label, ...otherLabels]),
+          correct: conn.label,
+          difficulty: 4
+        });
+      }
+    });
+  });
+
+  // Significance questions
+  nodes.filter(n => n.significance).forEach(n => {
+    const otherSigs = shuffle(nodes.filter(nn => nn.id !== n.id && nn.significance).map(nn => nn.significance)).slice(0, 3);
+    if (otherSigs.length >= 3) {
+      questions.push({
+        question: `Why is "${n.label}" significant to this case?`,
+        direction: 'Context',
+        options: shuffle([n.significance, ...otherSigs]),
+        correct: n.significance,
+        difficulty: 3
+      });
+    }
+  });
+
+  return shuffle(questions).slice(0, count);
+}
+
 // ===== SIGHT TRANSLATION =====
 async function startSight() {
   if (!state.currentCaseId) return;
@@ -1605,6 +1828,7 @@ async function startSight() {
   $('#quiz-results').classList.add('hidden');
   $('#sight-active').classList.remove('hidden');
   $('#sight-result').classList.add('hidden');
+  $('#sight-assessment').classList.add('hidden');
 
   try {
     const res = await apiFetch(`/api/quiz/sight/${state.currentCaseId}`, { method: 'POST' });
@@ -1617,46 +1841,71 @@ async function startSight() {
   }
 }
 
-let mediaRecorder = null;
-let audioChunks = [];
+function showSightAssessment() {
+  const keyTerms = state.sightData?.key_terms || [];
+  if (!keyTerms.length) { alert('No key terms available for assessment.'); return; }
 
-function toggleRecording() {
-  const btn = $('#sight-record-btn');
-  if (mediaRecorder && mediaRecorder.state === 'recording') {
-    mediaRecorder.stop();
-    btn.innerHTML = '&#127908; Record';
-    btn.style.background = '';
-    return;
-  }
-  navigator.mediaDevices.getUserMedia({ audio: true })
-    .then(stream => {
-      audioChunks = [];
-      mediaRecorder = new MediaRecorder(stream);
-      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-      mediaRecorder.onstop = () => {
-        stream.getTracks().forEach(t => t.stop());
-        showSightResult('[Voice captured \u2014 Whisper STT integration pending]');
-      };
-      mediaRecorder.start();
-      btn.innerHTML = '&#9209; Stop';
-      btn.style.background = 'var(--danger)';
-    })
-    .catch(() => alert('Microphone access denied.'));
+  $('#sight-assessment').classList.remove('hidden');
+  $('#sight-done-btn').disabled = true;
+
+  // Build checklist
+  $('#sight-checklist').innerHTML = keyTerms.map((t, i) => `
+    <label class="sight-check-item" data-idx="${i}">
+      <input type="checkbox" value="${i}">
+      <span class="sight-term-en">${esc(t.en)}</span>
+      <span class="sight-term-arrow">&rarr;</span>
+      <span class="sight-term-zh">${esc(t.zh_simplified || t.zh_traditional || '')}</span>
+    </label>
+  `).join('');
+
+  // Build confidence rating (1-5)
+  $('#sight-rating').innerHTML = [1,2,3,4,5].map(n =>
+    `<button class="sight-star" data-rating="${n}">${n}</button>`
+  ).join('');
+  state.sightRating = 3;
+  $$('.sight-star').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.sightRating = parseInt(btn.dataset.rating);
+      $$('.sight-star').forEach(b => b.classList.toggle('active', parseInt(b.dataset.rating) <= state.sightRating));
+    });
+  });
+  // Default highlight
+  $$('.sight-star').forEach(b => b.classList.toggle('active', parseInt(b.dataset.rating) <= 3));
+
+  // Toggle check items
+  $$('.sight-check-item').forEach(item => {
+    item.addEventListener('click', () => item.classList.toggle('checked'));
+  });
 }
 
-function showSightResult(transcription) {
-  const r = $('#sight-result');
-  r.classList.remove('hidden');
-  $('#sight-transcription').textContent = transcription;
+function submitSightAssessment() {
   const keyTerms = state.sightData?.key_terms || [];
-  if (keyTerms.length) {
-    $('#sight-key-terms').innerHTML = '<h4 style="margin-top:12px;">Key Terms:</h4>' +
-      keyTerms.map(t => `
-        <span style="display:inline-block;margin:3px 4px;padding:3px 10px;background:var(--primary-light);border-radius:6px;font-size:13px;font-weight:500;">
-          ${esc(t.en)} &rarr; ${esc(t.zh_simplified || t.zh_traditional || '')}
-        </span>
-      `).join('');
-  }
+  const checked = $$('.sight-check-item input:checked').length;
+  const total = keyTerms.length;
+  const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+
+  $('#sight-assessment').classList.add('hidden');
+  $('#sight-result').classList.remove('hidden');
+  $('#sight-score-display').innerHTML = `
+    <div class="results-grid" style="max-width:400px;margin:0 auto;">
+      <div class="result-card accuracy"><div class="result-value">${pct}%</div><div class="result-label">Terms Correct</div></div>
+      <div class="result-card streak"><div class="result-value">${checked}/${total}</div><div class="result-label">Terms Rendered</div></div>
+      <div class="result-card speed"><div class="result-value">${state.sightRating}/5</div><div class="result-label">Confidence</div></div>
+    </div>
+  `;
+
+  // Save score
+  apiFetch('/api/quiz/score', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      caseId: state.currentCaseId,
+      mode: 'sight',
+      score: pct,
+      total: total,
+      details: { termsCorrect: checked, termsTotal: total, confidence: state.sightRating }
+    })
+  }).catch(console.error);
 }
 
 // ===== EXPORT ALL TABS AS PDF =====

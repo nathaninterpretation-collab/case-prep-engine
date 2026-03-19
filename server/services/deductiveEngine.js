@@ -74,7 +74,7 @@ Generate preparation materials following these principles:
 2. Filter by: probability of appearing in THIS case × interpreter uncertainty. Drop terms any experienced court interpreter knows (courtroom, judge, attorney, plaintiff, defendant, objection, sustained, overruled, etc.). Surface terms that are case-specific and genuinely uncertain.
 3. The allegation/claim constrains the domain search. Don't search "chemistry" — search "chemistry of [specific compound] relevant to [specific allegation]."
 4. For each term: provide English, Simplified Chinese, Traditional Chinese, Pinyin, and a one-line context note explaining why it matters in THIS case.
-5. Context nodes must tie objective markers (dates, addresses, amounts, names) to their phenomenological meaning in the case.
+5. Context nodes must tie objective markers (dates, addresses, amounts, names) to their phenomenological meaning in the case. Every connection between nodes MUST have a descriptive label explaining the relationship (e.g., "mother of", "employer of", "filed by", "accident location", "owes debt to", "treated by"). Never leave connection labels empty.
 6. Legal theory should show causes of action → elements → evidence → implied questions → implied answers.
 7. Industry knowledge should show the constrained process/procedure with terminology embedded.
 8. Hazard zones should be full scenario-level: "When attorney asks X, witness might say Y, and the whole exchange is hard because Z."
@@ -82,7 +82,7 @@ Generate preparation materials following these principles:
 
 MINIMUM OUTPUT REQUIREMENTS (critical — do not produce less than these):
 - terminology: AT LEAST 50 terms (aim for 60-80). Mine the documents deeply. Include domain-specific terms, legal terms specific to this case type, technical vocabulary, proper nouns requiring translation, idiomatic expressions likely to appear, and terms from adjacent domains activated by the case. Go wide — the interpreter needs comprehensive coverage.
-- context_nodes: AT LEAST 20 nodes. Extract every date, person, location, amount, document, and event from the source material. Create connections between related nodes.
+- context_nodes: AT LEAST 20 nodes. Extract every date, person, location, amount, document, and event from the source material. Create rich connections between related nodes — each connection must include a relationship label.
 - hazard_zones: AT LEAST 6 scenarios.
 - Each cause of action should have AT LEAST 4 elements, 4 evidence items, 4 likely questions, and 4 likely answers.
 - Each industry process step should have AT LEAST 3 key_terms.
@@ -109,7 +109,7 @@ Respond with a JSON object with these keys:
       "type": "date|location|person|document|amount|event",
       "detail": "What this is",
       "significance": "Why it matters in this case",
-      "connections": ["id_of_connected_node"]
+      "connections": [{"target_id": "id_of_connected_node", "label": "relationship (e.g. mother of, debtor to, location of accident)"}]
     }
   ],
   "legal_theory": {

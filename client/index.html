@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CPE — Case Prep Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
@@ -177,12 +180,17 @@
         <div id="tab-quiz" class="tab-panel hidden">
           <div id="quiz-setup" class="quiz-setup">
             <h3>Test Your Readiness</h3>
-            <p class="quiz-subtitle">Choose a mode to quiz yourself on this case's terminology</p>
+            <p class="quiz-subtitle">Choose a mode to test your case preparation</p>
             <div class="quiz-mode-buttons">
               <div id="quiz-mcq-btn" class="quiz-mode-card">
                 <span class="mode-icon">&#9889;</span>
-                <div class="mode-title">Speed Quiz</div>
-                <div class="mode-desc">Timed MCQ with speed + streak scoring</div>
+                <div class="mode-title">Terminology Quiz</div>
+                <div class="mode-desc">Timed MCQ on case-specific terms</div>
+              </div>
+              <div id="quiz-context-btn" class="quiz-mode-card">
+                <span class="mode-icon">&#128736;</span>
+                <div class="mode-title">Context Quiz</div>
+                <div class="mode-desc">Test case facts, relationships &amp; details</div>
               </div>
               <div id="quiz-sight-btn" class="quiz-mode-card">
                 <span class="mode-icon">&#127908;</span>
@@ -236,14 +244,20 @@
           <div id="sight-active" class="sight-active hidden">
             <div id="sight-passage" class="sight-passage"></div>
             <div class="sight-controls">
-              <button id="sight-record-btn" class="btn-primary btn-large">&#127908; Record</button>
+              <button id="sight-done-btn" class="btn-primary btn-large">I'm Done Reading</button>
               <button id="sight-next-btn" class="btn-secondary btn-large">Next Passage</button>
             </div>
+            <div id="sight-assessment" class="sight-assessment hidden">
+              <h4>Self-Assessment: Which terms did you render correctly?</h4>
+              <div id="sight-checklist" class="sight-checklist"></div>
+              <div class="sight-confidence">
+                <label>Confidence level:</label>
+                <div id="sight-rating" class="sight-rating"></div>
+              </div>
+              <button id="sight-submit-btn" class="btn-primary btn-large">Submit Assessment</button>
+            </div>
             <div id="sight-result" class="sight-result hidden">
-              <h4>Your interpretation:</h4>
-              <div id="sight-transcription"></div>
-              <div id="sight-key-terms"></div>
-              <div id="sight-score"></div>
+              <div id="sight-score-display"></div>
             </div>
           </div>
         </div>
