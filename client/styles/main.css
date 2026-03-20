@@ -713,6 +713,12 @@ body {
   transition: stroke-opacity 0.25s ease, stroke-width 0.25s ease, opacity 0.35s ease;
 }
 
+/* Edge energy flow animation */
+@keyframes mm-edge-flow {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -28; }
+}
+
 /* Controls */
 .mindmap-controls {
   position: absolute;

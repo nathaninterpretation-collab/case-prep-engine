@@ -1329,6 +1329,7 @@ class MindMapRenderer {
   _clearFocus() {
     this.focusedNodeId = null;
     this.focusedSet.clear();
+    this._clearEdgePulse();
 
     const nodeEls = this.nodeGroup.querySelectorAll('.mm-node');
     nodeEls.forEach((g, i) => {
@@ -1398,10 +1399,134 @@ class MindMapRenderer {
     const bw = maxX - minX, bh = maxY - minY;
     const cw = this.container.clientWidth || 900;
     const ch = this.container.clientHeight || 600;
-    this.scale = Math.min(cw / bw, ch / bh, 1.5);
-    this.panX = (cw - bw * this.scale) / 2 - minX * this.scale;
-    this.panY = (ch - bh * this.scale) / 2 - minY * this.scale;
-    this._applyTransform();
+    const targetScale = Math.min(cw / bw, ch / bh, 1.5);
+    const targetPanX = (cw - bw * targetScale) / 2 - minX * targetScale;
+    const targetPanY = (ch - bh * targetScale) / 2 - minY * targetScale;
+    this._animateTransform(targetScale, targetPanX, targetPanY);
+  }
+
+  // ── Smooth animated zoom transition (Mandelbrot-style) ──
+  _animateTransform(targetScale, targetPanX, targetPanY, duration = 500) {
+    if (this._animRAF) cancelAnimationFrame(this._animRAF);
+    const startScale = this.scale;
+    const startPanX = this.panX;
+    const startPanY = this.panY;
+    const startTime = performance.now();
+
+    const easeOutExpo = t => t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+
+    const animate = (now) => {
+      const elapsed = now - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      const e = easeOutExpo(t);
+
+      this.scale = startScale + (targetScale - startScale) * e;
+      this.panX = startPanX + (targetPanX - startPanX) * e;
+      this.panY = startPanY + (targetPanY - startPanY) * e;
+      this._applyTransform();
+
+      if (t < 1) {
+        this._animRAF = requestAnimationFrame(animate);
+      } else {
+        this._animRAF = null;
+      }
+    };
+
+    this._animRAF = requestAnimationFrame(animate);
+  }
+
+  // ── Quantum ripple effect on focused node ──
+  _emitRipple(node) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const color = node.accentColor || node.stroke || 'var(--primary)';
+
+    for (let i = 0; i < 3; i++) {
+      const circle = document.createElementNS(NS, 'circle');
+      circle.setAttribute('cx', node.x);
+      circle.setAttribute('cy', node.y);
+      circle.setAttribute('r', '20');
+      circle.setAttribute('fill', 'none');
+      circle.setAttribute('stroke', color);
+      circle.setAttribute('stroke-width', '2');
+      circle.setAttribute('opacity', '0.6');
+      circle.style.pointerEvents = 'none';
+
+      // Animate with CSS
+      circle.style.transition = 'none';
+      this.transformGroup.appendChild(circle);
+
+      const delay = i * 120;
+      setTimeout(() => {
+        circle.style.transition = `r 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                                    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                                    stroke-width 0.8s ease-out`;
+        // SVG doesn't support CSS transitions on 'r' — use SMIL animation
+        const animR = document.createElementNS(NS, 'animate');
+        animR.setAttribute('attributeName', 'r');
+        animR.setAttribute('from', '20');
+        animR.setAttribute('to', '120');
+        animR.setAttribute('dur', '0.7s');
+        animR.setAttribute('begin', 'indefinite');
+        animR.setAttribute('fill', 'freeze');
+        circle.appendChild(animR);
+
+        const animOp = document.createElementNS(NS, 'animate');
+        animOp.setAttribute('attributeName', 'opacity');
+        animOp.setAttribute('from', '0.5');
+        animOp.setAttribute('to', '0');
+        animOp.setAttribute('dur', '0.7s');
+        animOp.setAttribute('begin', 'indefinite');
+        animOp.setAttribute('fill', 'freeze');
+        circle.appendChild(animOp);
+
+        const animSW = document.createElementNS(NS, 'animate');
+        animSW.setAttribute('attributeName', 'stroke-width');
+        animSW.setAttribute('from', '2');
+        animSW.setAttribute('to', '0.5');
+        animSW.setAttribute('dur', '0.7s');
+        animSW.setAttribute('begin', 'indefinite');
+        animSW.setAttribute('fill', 'freeze');
+        circle.appendChild(animSW);
+
+        animR.beginElement();
+        animOp.beginElement();
+        animSW.beginElement();
+
+        setTimeout(() => circle.remove(), 800);
+      }, delay);
+    }
+  }
+
+  // ── Energy pulse on active edges ──
+  _pulseEdges(nodeId, connectedIds) {
+    const activeSet = new Set(connectedIds);
+    activeSet.add(nodeId);
+
+    const edgeEls = this.edgeGroup.children;
+    for (let ei = 0; ei < this.edges.length; ei++) {
+      const edge = this.edges[ei];
+      const isActive = activeSet.has(edge.from) && activeSet.has(edge.to);
+      const visEl = edgeEls[ei * 2 + 1];
+      if (visEl && isActive) {
+        // Animate dash offset for energy flow effect
+        visEl.setAttribute('stroke-dasharray', '8,6');
+        visEl.setAttribute('stroke-opacity', '0.9');
+        visEl.style.animation = 'mm-edge-flow 1.2s linear infinite';
+      }
+    }
+  }
+
+  _clearEdgePulse() {
+    const edgeEls = this.edgeGroup.children;
+    for (let ei = 0; ei < this.edges.length; ei++) {
+      const edge = this.edges[ei];
+      const visEl = edgeEls[ei * 2 + 1];
+      if (visEl) {
+        visEl.style.animation = '';
+        visEl.setAttribute('stroke-dasharray', edge.dashed ? '5,5' : 'none');
+        visEl.setAttribute('stroke-opacity', '');
+      }
+    }
   }
 
   // ── Context Map: click to isolate neighborhood ──
@@ -1412,7 +1537,9 @@ class MindMapRenderer {
       if (edge.to === node.id) connectedIds.add(edge.from);
     });
 
+    this._emitRipple(node);
     this._applyFocus(node.id, connectedIds);
+    this._pulseEdges(node.id, connectedIds);
     this.expandedNodes.clear();
     this.expandedNodes.add(node.id);
     this.selectedNode = node;
@@ -1429,12 +1556,14 @@ class MindMapRenderer {
   _legalDrill(node) {
     if (node.tier === 0 && node.id !== 'root') {
       // Click COA → reveal its branches
+      this._emitRipple(node);
       this.drillLevel = 1;
       this.drillParentId = node.id;
       const childBranches = this.nodes.filter(n => n.tier === 1 && n.id.startsWith(node.id + '-')).map(n => n.id);
       this._showNodes(childBranches);
       const visibleSet = new Set(['root', node.id, ...childBranches]);
       this._applyFocus(node.id, visibleSet);
+      this._pulseEdges(node.id, new Set(childBranches));
       this.expandedNodes.clear();
       this.expandedNodes.add(node.id);
       this.selectedNode = node;
@@ -1442,6 +1571,7 @@ class MindMapRenderer {
       this._fitToVisibleNodes(visibleSet);
     } else if (node.tier === 1) {
       // Click branch → reveal its leaves
+      this._emitRipple(node);
       this.drillLevel = 2;
       const coaId = node.id.split('-').slice(0, 2).join('-');
       this.drillParentId = node.id;
@@ -1449,6 +1579,7 @@ class MindMapRenderer {
       this._showNodes(childLeaves);
       const visibleSet = new Set(['root', coaId, node.id, ...childLeaves]);
       this._applyFocus(node.id, visibleSet);
+      this._pulseEdges(node.id, new Set(childLeaves));
       this.expandedNodes.clear();
       this.expandedNodes.add(node.id);
       this.selectedNode = node;
@@ -1493,10 +1624,12 @@ class MindMapRenderer {
   // ── Industry Map: step-level drill ──
   _industryDrill(node) {
     if (node.tier === 0 && node.id.startsWith('step-')) {
+      this._emitRipple(node);
       const termIds = this.nodes.filter(n => n.tier === 2 && n.id.startsWith(node.id + '-term-')).map(n => n.id);
       this._showNodes(termIds);
       const focusedSet = new Set([node.id, 'domain-root', ...termIds]);
       this._applyFocus(node.id, focusedSet);
+      this._pulseEdges(node.id, new Set(termIds));
       this.expandedNodes.clear();
       this.expandedNodes.add(node.id);
       this.selectedNode = node;
