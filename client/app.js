@@ -777,6 +777,13 @@ class MindMapRenderer {
     this.edges = [];
     this.expandedNodes = new Set();
     this.onNodeClick = opts.onNodeClick || null;
+    // Focus mode state
+    this.mode = opts.mode || null;  // 'context' | 'legal' | 'industry' | null
+    this.focusedNodeId = null;
+    this.focusedSet = new Set();
+    this.hiddenNodes = new Set();
+    this.drillLevel = 0;
+    this.drillParentId = null;
     this._init();
   }
 
@@ -947,6 +954,25 @@ class MindMapRenderer {
       }
     }, { passive: true });
     this.svg.addEventListener('touchend', () => { this.dragging = false; lastTouchDist = 0; });
+
+    // Background click — clear focus / drill back (with drag guard)
+    let didDrag = false;
+    this.svg.addEventListener('mousedown', () => { didDrag = false; });
+    this.svg.addEventListener('mousemove', () => { didDrag = true; });
+    this.svg.addEventListener('click', (e) => {
+      if (didDrag) return;
+      if (e.target === this.svg || !e.target.closest('.mm-node')) {
+        this._onBackgroundClick();
+      }
+    });
+
+    // Escape key — same as background click (guarded to active tab)
+    this._escHandler = (e) => {
+      if (e.key === 'Escape' && this.container.offsetParent) {
+        this._onBackgroundClick();
+      }
+    };
+    document.addEventListener('keydown', this._escHandler);
   }
 
   _applyTransform() {
@@ -1242,7 +1268,15 @@ class MindMapRenderer {
     }
   }
 
+  // ── Click dispatch by mode ──
   _onNodeClick(node) {
+    if (this.mode === 'context') this._contextFocus(node);
+    else if (this.mode === 'legal') this._legalDrill(node);
+    else if (this.mode === 'industry') this._industryDrill(node);
+    else this._defaultNodeClick(node);
+  }
+
+  _defaultNodeClick(node) {
     if (this.expandedNodes.has(node.id)) {
       this.expandedNodes.delete(node.id);
       this.detailPanel.classList.add('hidden');
@@ -1253,9 +1287,234 @@ class MindMapRenderer {
       this.selectedNode = node;
       this._showDetail(node);
     }
-    // Lightweight visual update — only update stroke/chevron states without full SVG rebuild
     this._updateNodeStates();
     if (this.onNodeClick) this.onNodeClick(node);
+  }
+
+  // ── Background click dispatch ──
+  _onBackgroundClick() {
+    if (this.mode === 'context') { this._clearFocus(); this._fitToView(); }
+    else if (this.mode === 'legal') { this._legalDrillBack(); }
+    else if (this.mode === 'industry') { this._industryReset(); }
+    else { this._clearFocus(); }
+  }
+
+  // ── Focus/dim infrastructure (DOM-only, no SVG rebuild) ──
+  _applyFocus(focusedId, connectedIds) {
+    this.focusedNodeId = focusedId;
+    this.focusedSet = connectedIds instanceof Set ? connectedIds : new Set(connectedIds);
+    this.focusedSet.add(focusedId);
+
+    const nodeEls = this.nodeGroup.querySelectorAll('.mm-node');
+    nodeEls.forEach((g, i) => {
+      if (i >= this.nodes.length) return;
+      const node = this.nodes[i];
+      const isFocused = this.focusedSet.has(node.id);
+      const isHidden = this.hiddenNodes.has(node.id);
+      g.style.opacity = isHidden ? '0' : (isFocused ? '1' : '0.12');
+      g.style.pointerEvents = (isHidden || !isFocused) ? 'none' : 'auto';
+    });
+
+    const edgeEls = this.edgeGroup.children;
+    for (let ei = 0; ei < this.edges.length; ei++) {
+      const edge = this.edges[ei];
+      const isRelevant = this.focusedSet.has(edge.from) && this.focusedSet.has(edge.to);
+      const hitEl = edgeEls[ei * 2];
+      const visEl = edgeEls[ei * 2 + 1];
+      if (hitEl) hitEl.style.pointerEvents = isRelevant ? 'auto' : 'none';
+      if (visEl) visEl.style.opacity = isRelevant ? '0.8' : '0.06';
+    }
+  }
+
+  _clearFocus() {
+    this.focusedNodeId = null;
+    this.focusedSet.clear();
+
+    const nodeEls = this.nodeGroup.querySelectorAll('.mm-node');
+    nodeEls.forEach((g, i) => {
+      if (i >= this.nodes.length) return;
+      const isHidden = this.hiddenNodes.has(this.nodes[i].id);
+      g.style.opacity = isHidden ? '0' : '1';
+      g.style.pointerEvents = isHidden ? 'none' : 'auto';
+    });
+
+    const edgeEls = this.edgeGroup.children;
+    for (let ei = 0; ei < this.edges.length; ei++) {
+      const edge = this.edges[ei];
+      const edgeHidden = this.hiddenNodes.has(edge.from) || this.hiddenNodes.has(edge.to);
+      const hitEl = edgeEls[ei * 2];
+      const visEl = edgeEls[ei * 2 + 1];
+      if (hitEl) hitEl.style.pointerEvents = edgeHidden ? 'none' : 'auto';
+      if (visEl) visEl.style.opacity = edgeHidden ? '0' : '';
+    }
+
+    this.detailPanel.classList.add('hidden');
+    this.expandedNodes.clear();
+    this.selectedNode = null;
+  }
+
+  // ── Progressive disclosure (hide/show node subsets) ──
+  _hideNodes(nodeIds) {
+    nodeIds.forEach(id => this.hiddenNodes.add(id));
+    this._applyVisibility();
+  }
+
+  _showNodes(nodeIds) {
+    nodeIds.forEach(id => this.hiddenNodes.delete(id));
+    this._applyVisibility();
+  }
+
+  _applyVisibility() {
+    const nodeEls = this.nodeGroup.querySelectorAll('.mm-node');
+    nodeEls.forEach((g, i) => {
+      if (i >= this.nodes.length) return;
+      const isHidden = this.hiddenNodes.has(this.nodes[i].id);
+      g.style.opacity = isHidden ? '0' : '1';
+      g.style.pointerEvents = isHidden ? 'none' : 'auto';
+    });
+
+    const edgeEls = this.edgeGroup.children;
+    for (let ei = 0; ei < this.edges.length; ei++) {
+      const edge = this.edges[ei];
+      const edgeHidden = this.hiddenNodes.has(edge.from) || this.hiddenNodes.has(edge.to);
+      const hitEl = edgeEls[ei * 2];
+      const visEl = edgeEls[ei * 2 + 1];
+      if (hitEl) hitEl.style.pointerEvents = edgeHidden ? 'none' : 'auto';
+      if (visEl) visEl.style.opacity = edgeHidden ? '0' : '';
+    }
+  }
+
+  _fitToVisibleNodes(nodeIdSet) {
+    const visible = this.nodes.filter(n => {
+      if (nodeIdSet) return nodeIdSet.has ? nodeIdSet.has(n.id) : nodeIdSet.includes(n.id);
+      return !this.hiddenNodes.has(n.id);
+    });
+    if (!visible.length) return this._fitToView();
+    const xs = visible.map(n => n.x);
+    const ys = visible.map(n => n.y);
+    const pad = 120;
+    const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
+    const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
+    const bw = maxX - minX, bh = maxY - minY;
+    const cw = this.container.clientWidth || 900;
+    const ch = this.container.clientHeight || 600;
+    this.scale = Math.min(cw / bw, ch / bh, 1.5);
+    this.panX = (cw - bw * this.scale) / 2 - minX * this.scale;
+    this.panY = (ch - bh * this.scale) / 2 - minY * this.scale;
+    this._applyTransform();
+  }
+
+  // ── Context Map: click to isolate neighborhood ──
+  _contextFocus(node) {
+    const connectedIds = new Set();
+    this.edges.forEach(edge => {
+      if (edge.from === node.id) connectedIds.add(edge.to);
+      if (edge.to === node.id) connectedIds.add(edge.from);
+    });
+
+    this._applyFocus(node.id, connectedIds);
+    this.expandedNodes.clear();
+    this.expandedNodes.add(node.id);
+    this.selectedNode = node;
+    this._showDetail(node);
+    this._updateNodeStates();
+
+    const neighborhood = new Set(connectedIds);
+    neighborhood.add(node.id);
+    this._fitToVisibleNodes(neighborhood);
+    if (this.onNodeClick) this.onNodeClick(node);
+  }
+
+  // ── Legal Theory: progressive drill-down ──
+  _legalDrill(node) {
+    if (node.tier === 0 && node.id !== 'root') {
+      // Click COA → reveal its branches
+      this.drillLevel = 1;
+      this.drillParentId = node.id;
+      const childBranches = this.nodes.filter(n => n.tier === 1 && n.id.startsWith(node.id + '-')).map(n => n.id);
+      this._showNodes(childBranches);
+      const visibleSet = new Set(['root', node.id, ...childBranches]);
+      this._applyFocus(node.id, visibleSet);
+      this.expandedNodes.clear();
+      this.expandedNodes.add(node.id);
+      this.selectedNode = node;
+      this._showDetail(node);
+      this._fitToVisibleNodes(visibleSet);
+    } else if (node.tier === 1) {
+      // Click branch → reveal its leaves
+      this.drillLevel = 2;
+      const coaId = node.id.split('-').slice(0, 2).join('-');
+      this.drillParentId = node.id;
+      const childLeaves = this.nodes.filter(n => n.tier === 2 && n.id.startsWith(node.id + '-')).map(n => n.id);
+      this._showNodes(childLeaves);
+      const visibleSet = new Set(['root', coaId, node.id, ...childLeaves]);
+      this._applyFocus(node.id, visibleSet);
+      this.expandedNodes.clear();
+      this.expandedNodes.add(node.id);
+      this.selectedNode = node;
+      this._showDetail(node);
+      this._fitToVisibleNodes(visibleSet);
+    } else if (node.tier === 2) {
+      this._defaultNodeClick(node);
+    } else if (node.id === 'root') {
+      this._defaultNodeClick(node);
+    }
+    if (this.onNodeClick) this.onNodeClick(node);
+  }
+
+  _legalDrillBack() {
+    this.detailPanel.classList.add('hidden');
+    this.expandedNodes.clear();
+    this.selectedNode = null;
+
+    if (this.drillLevel === 2) {
+      const leafIds = this.nodes.filter(n => n.tier === 2).map(n => n.id);
+      this._hideNodes(leafIds);
+      const coaId = this.drillParentId.split('-').slice(0, 2).join('-');
+      const branchIds = this.nodes.filter(n => n.tier === 1 && n.id.startsWith(coaId + '-')).map(n => n.id);
+      const visibleSet = new Set(['root', coaId, ...branchIds]);
+      this._applyFocus(coaId, visibleSet);
+      this.drillLevel = 1;
+      this.drillParentId = coaId;
+      this._fitToVisibleNodes(visibleSet);
+    } else if (this.drillLevel === 1) {
+      const nonRootIds = this.nodes.filter(n => n.tier === 1 || n.tier === 2).map(n => n.id);
+      this._hideNodes(nonRootIds);
+      this._clearFocus();
+      this.drillLevel = 0;
+      this.drillParentId = null;
+      this._fitToVisibleNodes(null);
+    } else {
+      this._clearFocus();
+      this._fitToView();
+    }
+  }
+
+  // ── Industry Map: step-level drill ──
+  _industryDrill(node) {
+    if (node.tier === 0 && node.id.startsWith('step-')) {
+      const termIds = this.nodes.filter(n => n.tier === 2 && n.id.startsWith(node.id + '-term-')).map(n => n.id);
+      this._showNodes(termIds);
+      const focusedSet = new Set([node.id, 'domain-root', ...termIds]);
+      this._applyFocus(node.id, focusedSet);
+      this.expandedNodes.clear();
+      this.expandedNodes.add(node.id);
+      this.selectedNode = node;
+      this._showDetail(node);
+      this._fitToVisibleNodes(focusedSet);
+    } else if (node.tier === 2) {
+      this._defaultNodeClick(node);
+    } else if (node.id === 'domain-root') {
+      this._defaultNodeClick(node);
+    }
+    if (this.onNodeClick) this.onNodeClick(node);
+  }
+
+  _industryReset() {
+    const termIds = this.nodes.filter(n => n.tier === 2).map(n => n.id);
+    this._hideNodes(termIds);
+    this._clearFocus();
+    this._fitToVisibleNodes(null);
   }
 
   _updateNodeStates() {
@@ -1450,6 +1709,7 @@ function renderContext(nodes) {
   });
 
   const mm = new MindMapRenderer(c);
+  mm.mode = 'context';
   mm.setData(mmNodes, mmEdges);
 }
 
@@ -1564,7 +1824,17 @@ function renderLegalTheory(theory) {
   resolveOverlaps(mmNodes, 20, 14);
 
   const mm = new MindMapRenderer(c);
+  mm.mode = 'legal';
+  mm.drillLevel = 0;
+  mm.drillParentId = null;
   mm.setData(mmNodes, mmEdges);
+
+  // Progressive disclosure: initially hide branches (tier 1) and leaves (tier 2)
+  const hiddenIds = mmNodes.filter(n => n.tier === 1 || n.tier === 2).map(n => n.id);
+  setTimeout(() => {
+    mm._hideNodes(hiddenIds);
+    mm._fitToVisibleNodes(null);
+  }, 250);
 }
 
 // ===== TAB 4: INDUSTRY (Interactive Flowchart) =====
@@ -1663,7 +1933,15 @@ function renderIndustry(knowledge) {
   resolveOverlaps(termNodes, 18, 12);
 
   const mm = new MindMapRenderer(fl);
+  mm.mode = 'industry';
   mm.setData(mmNodes, mmEdges);
+
+  // Progressive disclosure: initially hide all terms (tier 2)
+  const hiddenTerms = mmNodes.filter(n => n.tier === 2).map(n => n.id);
+  setTimeout(() => {
+    mm._hideNodes(hiddenTerms);
+    mm._fitToVisibleNodes(null);
+  }, 250);
 }
 
 // ===== TAB 5: HAZARDS =====

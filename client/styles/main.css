@@ -710,7 +710,7 @@ body {
   transition: stroke 0.2s ease, stroke-width 0.2s ease, filter 0.2s ease;
 }
 .mm-edge {
-  transition: stroke-opacity 0.25s ease, stroke-width 0.25s ease;
+  transition: stroke-opacity 0.25s ease, stroke-width 0.25s ease, opacity 0.35s ease;
 }
 
 /* Controls */
