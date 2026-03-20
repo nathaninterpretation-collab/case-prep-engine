@@ -890,9 +890,6 @@ body {
 }
 .mm-tooltip.hidden { opacity: 0; display: none; }
 
-/* Edges */
-.mm-edge { transition: stroke-opacity 0.25s ease, stroke-width 0.25s ease; }
-
 /* Sight Translation Self-Assessment */
 .sight-assessment { margin-top: 20px; }
 .sight-assessment h4 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
@@ -1699,6 +1696,9 @@ body {
   /* Podcast — dark mode */
   .podcast-zh { background: rgba(37, 99, 235, 0.15); color: #93b4f5; }
   .podcast-segment-header { color: #93b4f5; border-bottom-color: rgba(37, 99, 235, 0.2); }
+
+  /* Auth screen — dark mode */
+  .auth-screen { background: linear-gradient(135deg, #0f1117 0%, #1a1d27 50%, #22262f 100%); }
 }
 
 /* ===== SPINNER ===== */

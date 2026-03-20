@@ -289,7 +289,10 @@ function bindEvents() {
   $('#podcast-copy-btn').addEventListener('click', copyPodcastScript);
   $('#podcast-play-btn').addEventListener('click', playPodcastScript);
   $('#podcast-stop-btn').addEventListener('click', stopPodcastScript);
-  $('#quiz-retry-btn').addEventListener('click', startMCQ);
+  $('#quiz-retry-btn').addEventListener('click', () => {
+    if (state.quizState?.mode === 'context') startContextQuiz();
+    else startMCQ();
+  });
   $('#quiz-back-btn').addEventListener('click', showQuizSetup);
   $('#sight-done-btn').addEventListener('click', showSightAssessment);
   $('#sight-next-btn').addEventListener('click', startSight);
@@ -543,6 +546,15 @@ function renderTab(tab) {
 }
 
 // ===== TAB 1: TERMINOLOGY =====
+// Renderer cache — prevents event listener leaks on tab switch
+const _renderers = {};
+function getOrCreateRenderer(key, container) {
+  if (_renderers[key]) _renderers[key].destroy();
+  const mm = new MindMapRenderer(container);
+  _renderers[key] = mm;
+  return mm;
+}
+
 let termSortKey = 'difficulty';
 let termSortDir = -1;
 let zhMode = 'simplified'; // 'simplified' | 'traditional'
@@ -787,6 +799,14 @@ class MindMapRenderer {
     this._init();
   }
 
+  destroy() {
+    if (this._onMouseMove) window.removeEventListener('mousemove', this._onMouseMove);
+    if (this._onMouseUp) window.removeEventListener('mouseup', this._onMouseUp);
+    if (this._escHandler) document.removeEventListener('keydown', this._escHandler);
+    if (this._animRAF) cancelAnimationFrame(this._animRAF);
+    this.container.innerHTML = '';
+  }
+
   _init() {
     this.container.innerHTML = '';
     this.container.classList.add('mindmap-container');
@@ -903,16 +923,18 @@ class MindMapRenderer {
         this.svg.style.cursor = 'grabbing';
       }
     });
-    window.addEventListener('mousemove', (e) => {
+    this._onMouseMove = (e) => {
       if (!this.dragging) return;
       this.panX = e.clientX - this.dragStart.x;
       this.panY = e.clientY - this.dragStart.y;
       this._applyTransform();
-    });
-    window.addEventListener('mouseup', () => {
+    };
+    this._onMouseUp = () => {
       this.dragging = false;
       this.svg.style.cursor = 'grab';
-    });
+    };
+    window.addEventListener('mousemove', this._onMouseMove);
+    window.addEventListener('mouseup', this._onMouseUp);
 
     // Zoom
     this.svg.addEventListener('wheel', (e) => {
@@ -1007,13 +1029,13 @@ class MindMapRenderer {
 
   setData(nodes, edges) {
     this.nodes = nodes;
-    this.edges = edges;
+    // Filter out edges with invalid node refs so DOM indexing stays aligned
+    const nodeIds = new Set(nodes.map(n => n.id));
+    this.edges = edges.filter(e => nodeIds.has(e.from) && nodeIds.has(e.to));
     this.expandedNodes.clear();
     this._render();
-    // Fit immediately and again after layout settles
-    this._fitToView();
+    // Fit after layout settles
     requestAnimationFrame(() => this._fitToView());
-    setTimeout(() => this._fitToView(), 150);
   }
 
   _render() {
@@ -1022,12 +1044,17 @@ class MindMapRenderer {
     this.labelGroup.innerHTML = '';
     const NS = 'http://www.w3.org/2000/svg';
     const self = this;
+    const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const defaultStroke = isDarkMode ? '#3a4050' : '#D1D5DB';
+
+    // Build node lookup map for O(1) edge resolution
+    const nodeMap = new Map(this.nodes.map(n => [n.id, n]));
 
     // ── EDGES ──
     for (let ei = 0; ei < this.edges.length; ei++) {
       const edge = this.edges[ei];
-      const from = this.nodes.find(n => n.id === edge.from);
-      const to = this.nodes.find(n => n.id === edge.to);
+      const from = nodeMap.get(edge.from);
+      const to = nodeMap.get(edge.to);
       if (!from || !to) continue;
 
       const dx = to.x - from.x;
@@ -1100,7 +1127,7 @@ class MindMapRenderer {
       g.classList.add('mm-node');
       g.style.cursor = 'pointer';
       g.style.opacity = '0';
-      g.style.transition = `opacity 0.4s ease ${ni * 25}ms, transform 0.15s ease`;
+      g.style.transition = `opacity 0.35s ease ${Math.min(ni * 15, 400)}ms`;
 
       const isExpanded = this.expandedNodes.has(node.id);
       const w = node.width || (node.tier === 0 ? 210 : node.tier === 1 ? 180 : 165);
@@ -1119,14 +1146,13 @@ class MindMapRenderer {
       rect.setAttribute('rx', rx);
       rect.setAttribute('fill', `url(#${gradId})`);
       const defaultStrokeW = node.accentColor ? 1.5 : 1;
-      const defaultStroke = window.matchMedia('(prefers-color-scheme: dark)').matches ? '#3a4050' : '#D1D5DB';
+      // defaultStroke computed once at top of _render()
       rect.setAttribute('stroke', isExpanded ? 'var(--primary)' : (node.stroke || defaultStroke));
       rect.setAttribute('stroke-width', isExpanded ? 2.5 : defaultStrokeW);
       rect.setAttribute('filter', 'url(#mm-shadow)');
       g.appendChild(rect);
 
       // Top highlight (glass reflection) — subtler in dark mode
-      const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
       const highlight = document.createElementNS(NS, 'rect');
       highlight.setAttribute('x', -w / 2 + 1);
       highlight.setAttribute('y', -h / 2 + 1);
@@ -1230,7 +1256,7 @@ class MindMapRenderer {
         rect.setAttribute('filter', 'url(#mm-shadow-hover)');
         rect.setAttribute('stroke', node.accentColor || 'var(--primary)');
         rect.setAttribute('stroke-width', '1.5');
-        g.style.transform = `translate(${node.x}px,${node.y}px) scale(1.03)`;
+        g.setAttribute('transform', `translate(${node.x},${node.y}) scale(1.03)`);
         // Show full-text tooltip if label was truncated
         const fullLabel = node.label + (node.sublabel ? '\n' + node.sublabel : '');
         const maxCharsCheck = Math.floor((w - (node.icon ? 40 : 16)) / (node.tier === 0 ? 7 : 6.2));
@@ -1257,7 +1283,7 @@ class MindMapRenderer {
           rect.setAttribute('stroke', node.stroke || defaultStroke);
           rect.setAttribute('stroke-width', node.accentColor ? '1.5' : '1');
         }
-        g.style.transform = '';
+        g.setAttribute('transform', `translate(${node.x},${node.y})`);
         self.tooltip.classList.add('hidden');
       });
 
@@ -1523,8 +1549,9 @@ class MindMapRenderer {
       const visEl = edgeEls[ei * 2 + 1];
       if (visEl) {
         visEl.style.animation = '';
-        visEl.setAttribute('stroke-dasharray', edge.dashed ? '5,5' : 'none');
-        visEl.setAttribute('stroke-opacity', '');
+        if (edge.dashed) visEl.setAttribute('stroke-dasharray', '5,5');
+        else visEl.removeAttribute('stroke-dasharray');
+        visEl.setAttribute('stroke-opacity', '0.45');
       }
     }
   }
@@ -1692,7 +1719,8 @@ class MindMapRenderer {
       this.detailPanel.classList.add('hidden');
       this.expandedNodes.clear();
       this.selectedNode = null;
-      this._render();
+      this._updateNodeStates();
+      if (this.focusedNodeId) this._onBackgroundClick();
     });
   }
 }
@@ -1841,7 +1869,7 @@ function renderContext(nodes) {
     });
   });
 
-  const mm = new MindMapRenderer(c);
+  const mm = getOrCreateRenderer('context', c);
   mm.mode = 'context';
   mm.setData(mmNodes, mmEdges);
 }
@@ -1956,7 +1984,7 @@ function renderLegalTheory(theory) {
   // Resolve overlaps
   resolveOverlaps(mmNodes, 20, 14);
 
-  const mm = new MindMapRenderer(c);
+  const mm = getOrCreateRenderer('legal', c);
   mm.mode = 'legal';
   mm.drillLevel = 0;
   mm.drillParentId = null;
@@ -2065,7 +2093,7 @@ function renderIndustry(knowledge) {
   const termNodes = mmNodes.filter(n => n.id.includes('-term-'));
   resolveOverlaps(termNodes, 18, 12);
 
-  const mm = new MindMapRenderer(fl);
+  const mm = getOrCreateRenderer('industry', fl);
   mm.mode = 'industry';
   mm.setData(mmNodes, mmEdges);
 
@@ -2989,9 +3017,7 @@ function stopPodcastScript() {
 // ===== UTILITIES =====
 function esc(str) {
   if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = String(str);
-  return div.innerHTML;
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function downloadText(content, filename) {
