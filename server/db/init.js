@@ -46,5 +46,11 @@ export function initDb(dbPath) {
   // Add podcast_json column for cached podcast scripts
   try { db.exec('ALTER TABLE cases ADD COLUMN podcast_json TEXT'); } catch {}
 
+  // Ensure default local user exists (auth-bypass mode)
+  const defaultUser = db.prepare('SELECT id FROM users WHERE id = ?').get('default-user');
+  if (!defaultUser) {
+    db.prepare('INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)').run('default-user', 'local@cpe.local', 'BYPASS');
+  }
+
   return db;
 }

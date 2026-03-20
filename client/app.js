@@ -72,6 +72,7 @@ function updateKeyStatus() {
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
 
+  // Auth bypass — go straight to app with default user
   const token = getToken();
   if (token) {
     try {
@@ -85,9 +86,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
     } catch {}
-    clearToken();
   }
-  showAuthScreen();
+  // No valid token — auto-create guest session to bypass login
+  try {
+    const res = await fetch('/api/auth/guest', { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      setToken(data.token);
+      state.user = data.user;
+      state.isGuest = true;
+      showApp();
+      loadCases();
+      return;
+    }
+  } catch {}
+  // Fallback — just show app without auth
+  state.user = { id: 'default-user', email: 'local@cpe.local', has_api_key: false };
+  showApp();
+  loadCases();
 });
 
 function bindEvents() {
@@ -244,6 +260,7 @@ function bindEvents() {
       state.user = data.user;
       state.isGuest = true;
       showApp();
+      loadCases();
       // Immediately show API key modal for guests
       $('#api-key-modal').classList.remove('hidden');
     } catch (err) {
