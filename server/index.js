@@ -21,6 +21,17 @@ if (dotenvResult.parsed) {
   }
 }
 
+// Ensure required secrets exist — auto-generate for local dev if missing
+import { randomBytes } from 'crypto';
+if (!process.env.JWT_SECRET) {
+  console.warn('WARNING: JWT_SECRET not set — generating a temporary secret. Set it in .env for persistent sessions.');
+  process.env.JWT_SECRET = randomBytes(32).toString('hex');
+}
+if (!process.env.ENCRYPTION_KEY) {
+  console.warn('WARNING: ENCRYPTION_KEY not set — generating a temporary key. Set it in .env for persistent API key storage.');
+  process.env.ENCRYPTION_KEY = randomBytes(32).toString('hex');
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 

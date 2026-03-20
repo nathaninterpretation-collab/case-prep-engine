@@ -244,6 +244,7 @@ function bindEvents() {
       state.user = data.user;
       state.isGuest = true;
       showApp();
+      loadCases();
       // Immediately show API key modal for guests
       $('#api-key-modal').classList.remove('hidden');
     } catch (err) {
