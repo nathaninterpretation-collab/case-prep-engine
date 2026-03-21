@@ -297,6 +297,18 @@ function bindEvents() {
   $('#sight-done-btn').addEventListener('click', showSightAssessment);
   $('#sight-next-btn').addEventListener('click', startSight);
   $('#sight-submit-btn').addEventListener('click', submitSightAssessment);
+
+  // SDM — Synthetic Dialectical Mediation
+  $('#sdm-start-btn').addEventListener('click', startDialectic);
+  $('#sdm-synthesize-btn').addEventListener('click', synthesizeDialectic);
+  $('#sdm-new-btn').addEventListener('click', showSdmSetup);
+  $$('.sdm-round-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('.sdm-round-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  initSdmSpeakersPreview();
 }
 
 // ===== FILE HANDLING =====
@@ -410,7 +422,10 @@ async function loadCase(id) {
 // ===== MODE SWITCHING =====
 function showUploadMode() {
   $('#upload-hero').classList.remove('hidden');
-  $('#tab-nav').style.display = 'none';
+  // Show tab nav but only SDM tab when no analysis
+  $('#tab-nav').style.display = 'flex';
+  $$('.tab-btn:not(.sdm-tab-btn)').forEach(b => b.style.display = 'none');
+  $('.sdm-tab-btn').style.display = '';
   $$('.tab-panel').forEach(p => p.classList.add('hidden'));
   $('#topbar-upload').style.display = 'none';
   $('#case-name-input').style.display = 'none';
@@ -421,6 +436,7 @@ function showUploadMode() {
 function showAnalysisMode() {
   $('#upload-hero').classList.add('hidden');
   $('#tab-nav').style.display = 'flex';
+  $$('.tab-btn').forEach(b => b.style.display = '');
   $('#topbar-upload').style.display = 'flex';
   $('#case-name-input').style.display = 'block';
   $('#analyze-btn').style.display = 'block';
@@ -524,6 +540,16 @@ function switchTab(tab) {
   $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   $$('.tab-panel').forEach(p => p.classList.add('hidden'));
 
+  // SDM tab works independently of case analysis
+  if (tab === 'dialectic') {
+    const panel = $('#tab-dialectic');
+    if (panel) {
+      panel.classList.remove('hidden');
+      renderTab(tab);
+    }
+    return;
+  }
+
   const panel = $(`#tab-${tab}`);
   if (panel && state.currentAnalysis) {
     panel.classList.remove('hidden');
@@ -532,6 +558,10 @@ function switchTab(tab) {
 }
 
 function renderTab(tab) {
+  if (tab === 'dialectic') {
+    showSdmSetup();
+    return;
+  }
   const a = state.currentAnalysis;
   if (!a) return;
   switch (tab) {
@@ -3012,6 +3042,253 @@ function stopPodcastScript() {
   podcastSpeechIdx = 0;
   $('#podcast-play-btn').classList.remove('hidden');
   $('#podcast-stop-btn').classList.add('hidden');
+}
+
+// ===== SDM — SYNTHETIC DIALECTICAL MEDIATION =====
+let sdmState = {
+  sessionId: null,
+  sessionData: null,
+  synthesisData: null
+};
+
+const SDM_SPEAKERS = [
+  { id: 'alyosha', name: 'Alyosha', title: 'The Sincere Seeker', icon: '🕊', color: '#4a9eff' },
+  { id: 'ivan', name: 'Ivan', title: 'The Rationalist', icon: '⚡', color: '#ff4a4a' },
+  { id: 'genealogist', name: 'Maren', title: 'The Genealogist', icon: '📜', color: '#ffa94a' },
+  { id: 'cynic', name: 'Diogenes', title: 'The Cynic', icon: '🏺', color: '#9b59b6' },
+  { id: 'user_proxy', name: 'Sophia', title: 'The Reasoner', icon: '🔬', color: '#2ecc71' }
+];
+
+function initSdmSpeakersPreview() {
+  const container = $('#sdm-speakers-preview');
+  if (!container) return;
+  container.innerHTML = SDM_SPEAKERS.map(s =>
+    `<div class="sdm-speaker-chip" style="--speaker-color: ${s.color}">
+      <span class="sdm-speaker-icon">${s.icon}</span>
+      <span class="sdm-speaker-name">${s.name}</span>
+      <span class="sdm-speaker-title">${s.title}</span>
+    </div>`
+  ).join('');
+}
+
+function showSdmSetup() {
+  const setup = $('#sdm-setup');
+  const loading = $('#sdm-loading');
+  const viewer = $('#sdm-viewer');
+
+  // If we have an active session, show viewer
+  if (sdmState.sessionData) {
+    setup.classList.add('hidden');
+    loading.classList.add('hidden');
+    viewer.classList.remove('hidden');
+    return;
+  }
+
+  setup.classList.remove('hidden');
+  loading.classList.add('hidden');
+  viewer.classList.add('hidden');
+  loadSdmHistory();
+}
+
+async function loadSdmHistory() {
+  try {
+    const res = await apiFetch('/api/dialectic/sessions');
+    if (!res.ok) return;
+    const sessions = await res.json();
+    const container = $('#sdm-history');
+    if (!sessions.length) {
+      container.innerHTML = '';
+      return;
+    }
+    container.innerHTML = `
+      <h4 class="sdm-history-title">Previous Sessions</h4>
+      ${sessions.map(s => `
+        <button class="sdm-history-item" data-session-id="${esc(s.id)}">
+          <span class="sdm-history-thesis">${esc(s.thesis.slice(0, 100))}${s.thesis.length > 100 ? '...' : ''}</span>
+          <span class="sdm-history-date">${new Date(s.created_at).toLocaleDateString()}</span>
+        </button>
+      `).join('')}
+    `;
+    container.querySelectorAll('.sdm-history-item').forEach(btn => {
+      btn.addEventListener('click', () => loadSdmSession(btn.dataset.sessionId));
+    });
+  } catch (e) {
+    console.error('Failed to load SDM history:', e);
+  }
+}
+
+async function loadSdmSession(sessionId) {
+  try {
+    const res = await apiFetch(`/api/dialectic/session/${sessionId}`);
+    if (!res.ok) throw new Error('Session not found');
+    const data = await res.json();
+    sdmState.sessionId = sessionId;
+    sdmState.sessionData = data;
+    sdmState.synthesisData = data.synthesis || null;
+    renderSdmViewer(data);
+  } catch (e) {
+    console.error('Failed to load session:', e);
+  }
+}
+
+async function startDialectic() {
+  const thesisInput = $('#sdm-thesis-input');
+  const thesis = thesisInput.value.trim();
+  if (!thesis) return;
+
+  const activeRoundBtn = document.querySelector('.sdm-round-btn.active');
+  const rounds = parseInt(activeRoundBtn?.dataset.rounds || '5');
+
+  const setup = $('#sdm-setup');
+  const loading = $('#sdm-loading');
+  const viewer = $('#sdm-viewer');
+
+  setup.classList.add('hidden');
+  loading.classList.remove('hidden');
+  viewer.classList.add('hidden');
+  $('#sdm-loading-round').textContent = '1';
+
+  try {
+    const res = await apiFetch('/api/dialectic/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thesis, rounds })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to start dialectic');
+    }
+
+    const data = await res.json();
+    sdmState.sessionId = data.id;
+    sdmState.sessionData = data;
+    sdmState.synthesisData = null;
+
+    loading.classList.add('hidden');
+    renderSdmViewer(data);
+  } catch (e) {
+    loading.classList.add('hidden');
+    setup.classList.remove('hidden');
+    alert('Dialectic failed: ' + e.message);
+  }
+}
+
+function renderSdmViewer(data) {
+  const viewer = $('#sdm-viewer');
+  const setup = $('#sdm-setup');
+  const loading = $('#sdm-loading');
+
+  setup.classList.add('hidden');
+  loading.classList.add('hidden');
+  viewer.classList.remove('hidden');
+
+  $('#sdm-thesis-text').textContent = data.thesis;
+
+  const conversation = $('#sdm-conversation');
+  let html = '';
+
+  for (const round of data.rounds) {
+    html += `<div class="sdm-round">
+      <div class="sdm-round-header">
+        <span class="sdm-round-number">Round ${round.round}</span>
+        ${round.mediator_note || round.mediator_observation
+          ? `<span class="sdm-mediator-note">${esc(round.mediator_note || round.mediator_observation)}</span>`
+          : ''}
+      </div>`;
+
+    for (const turn of round.turns) {
+      const speakerColor = turn.color || '#888';
+      html += `<div class="sdm-turn" style="--speaker-color: ${speakerColor}">
+        <div class="sdm-turn-header">
+          <span class="sdm-turn-icon">${turn.icon || ''}</span>
+          <span class="sdm-turn-speaker">${esc(turn.speaker)}</span>
+          <span class="sdm-turn-title">${esc(turn.title)}</span>
+          ${turn.respond_to ? `<span class="sdm-turn-respond-to">→ ${esc(turn.respond_to)}</span>` : ''}
+        </div>
+        <div class="sdm-turn-content">${formatSdmContent(turn.content)}</div>
+      </div>`;
+    }
+
+    html += '</div>';
+  }
+
+  conversation.innerHTML = html;
+
+  // Show synthesis if available
+  const synthesisEl = $('#sdm-synthesis');
+  if (data.synthesis) {
+    sdmState.synthesisData = data.synthesis;
+    synthesisEl.classList.remove('hidden');
+    synthesisEl.innerHTML = `<div class="sdm-synthesis-content">${formatSdmContent(data.synthesis.synthesis)}</div>`;
+    $('#sdm-synthesize-btn').textContent = 'Conclusion Drawn';
+    $('#sdm-synthesize-btn').disabled = true;
+  } else {
+    synthesisEl.classList.add('hidden');
+    synthesisEl.innerHTML = '';
+    $('#sdm-synthesize-btn').textContent = 'Draw Conclusion';
+    $('#sdm-synthesize-btn').disabled = false;
+  }
+}
+
+function formatSdmContent(text) {
+  if (!text) return '';
+  let html = esc(text);
+  // Markdown-lite: headers, bold, italic, paragraphs
+  html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+  html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  html = html.replace(/\n\n/g, '</p><p>');
+  html = '<p>' + html + '</p>';
+  return html;
+}
+
+async function synthesizeDialectic() {
+  if (!sdmState.sessionId) return;
+
+  const btn = $('#sdm-synthesize-btn');
+  btn.disabled = true;
+  btn.textContent = 'Synthesizing...';
+
+  try {
+    const res = await apiFetch(`/api/dialectic/synthesize/${sdmState.sessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Synthesis failed');
+    }
+
+    const synthesis = await res.json();
+    sdmState.synthesisData = synthesis;
+
+    const synthesisEl = $('#sdm-synthesis');
+    synthesisEl.classList.remove('hidden');
+    synthesisEl.innerHTML = `<div class="sdm-synthesis-content">${formatSdmContent(synthesis.synthesis)}</div>`;
+
+    btn.textContent = 'Conclusion Drawn';
+    // Scroll to synthesis
+    synthesisEl.scrollIntoView({ behavior: 'smooth' });
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Draw Conclusion';
+    alert('Synthesis failed: ' + e.message);
+  }
+}
+
+function showSdmSetup() {
+  sdmState = { sessionId: null, sessionData: null, synthesisData: null };
+  const setup = $('#sdm-setup');
+  const loading = $('#sdm-loading');
+  const viewer = $('#sdm-viewer');
+  setup.classList.remove('hidden');
+  loading.classList.add('hidden');
+  viewer.classList.add('hidden');
+  $('#sdm-thesis-input').value = '';
+  loadSdmHistory();
 }
 
 // ===== UTILITIES =====

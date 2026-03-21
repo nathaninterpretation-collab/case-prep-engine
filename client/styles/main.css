@@ -1816,3 +1816,154 @@ body {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
 }
 .user-email { font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== SDM — SYNTHETIC DIALECTICAL MEDIATION ===== */
+.sdm-tab-btn {
+  background: linear-gradient(135deg, #7c3aed 0%, #2563eb 100%);
+  color: #fff !important;
+  border-radius: 6px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 6px 14px;
+}
+.sdm-tab-btn.active { box-shadow: 0 0 12px rgba(124, 58, 237, 0.4); }
+
+.sdm-setup { padding: 32px 24px; max-width: 760px; margin: 0 auto; }
+.sdm-hero { text-align: center; }
+.sdm-hero-icon { font-size: 48px; display: block; margin-bottom: 12px; }
+.sdm-hero h3 { font-size: 24px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.sdm-subtitle { color: var(--text-2); line-height: 1.6; max-width: 600px; margin: 0 auto 24px; font-size: 14px; }
+
+.sdm-speakers-preview {
+  display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 28px;
+}
+.sdm-speaker-chip {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 6px 14px; font-size: 13px;
+  border-left: 3px solid var(--speaker-color);
+}
+.sdm-speaker-icon { font-size: 16px; }
+.sdm-speaker-name { font-weight: 600; color: var(--text); }
+.sdm-speaker-title { color: var(--text-3); font-size: 11px; }
+
+.sdm-input-area { max-width: 600px; margin: 0 auto; }
+.sdm-thesis-input {
+  width: 100%; padding: 14px 16px; border: 2px solid var(--border);
+  border-radius: var(--radius); font-size: 15px; font-family: inherit;
+  resize: vertical; min-height: 100px; transition: border-color 0.2s;
+  background: var(--surface);
+}
+.sdm-thesis-input:focus { border-color: var(--primary); outline: none; }
+
+.sdm-controls {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 14px; gap: 16px;
+}
+.sdm-rounds-selector {
+  display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2);
+}
+.sdm-round-btn {
+  padding: 6px 14px; border: 1px solid var(--border); background: var(--surface);
+  border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;
+  transition: all 0.15s;
+}
+.sdm-round-btn.active {
+  background: var(--primary); color: #fff; border-color: var(--primary);
+}
+.sdm-round-btn:hover:not(.active) { border-color: var(--primary); color: var(--primary); }
+
+.sdm-start-btn { font-size: 16px; padding: 12px 32px; }
+
+/* Loading */
+.sdm-loading { text-align: center; padding: 80px 24px; }
+.sdm-loading p { margin-top: 16px; color: var(--text-2); }
+.sdm-loading-note { color: var(--text-3); font-size: 13px; }
+
+/* Viewer */
+.sdm-viewer { padding: 20px 24px; max-width: 900px; margin: 0 auto; }
+.sdm-viewer-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; margin-bottom: 24px; flex-wrap: wrap;
+}
+.sdm-thesis-display {
+  flex: 1; min-width: 250px; background: var(--surface-2);
+  border-radius: var(--radius); padding: 12px 16px;
+  border-left: 4px solid var(--accent);
+}
+.sdm-thesis-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-3); display: block; margin-bottom: 4px; }
+.sdm-thesis-text { font-size: 15px; color: var(--text); line-height: 1.5; font-style: italic; }
+.sdm-viewer-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+.sdm-synthesize-btn {
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  border: none; color: #fff; font-weight: 700;
+  padding: 10px 20px; border-radius: var(--radius); cursor: pointer;
+}
+.sdm-synthesize-btn:disabled { opacity: 0.6; cursor: default; }
+
+/* Conversation rounds */
+.sdm-round { margin-bottom: 28px; }
+.sdm-round-header {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.sdm-round-number {
+  font-weight: 800; font-size: 12px; text-transform: uppercase;
+  letter-spacing: 1.5px; color: var(--text-3);
+  background: var(--surface-3); padding: 4px 10px; border-radius: 4px;
+}
+.sdm-mediator-note {
+  font-size: 12px; color: var(--text-3); font-style: italic;
+  padding: 4px 10px; background: var(--surface-2); border-radius: 4px;
+}
+
+/* Individual turns */
+.sdm-turn {
+  margin-bottom: 16px; padding: 16px 20px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 4px solid var(--speaker-color);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.sdm-turn-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.sdm-turn-icon { font-size: 18px; }
+.sdm-turn-speaker { font-weight: 700; font-size: 14px; color: var(--speaker-color); }
+.sdm-turn-title { font-size: 12px; color: var(--text-3); }
+.sdm-turn-respond-to {
+  font-size: 11px; color: var(--text-3); background: var(--surface-2);
+  padding: 2px 8px; border-radius: 10px; margin-left: auto;
+}
+.sdm-turn-content { font-size: 14px; line-height: 1.7; color: var(--text); }
+.sdm-turn-content p { margin-bottom: 10px; }
+.sdm-turn-content p:last-child { margin-bottom: 0; }
+.sdm-turn-content h3 { font-size: 16px; margin: 14px 0 8px; color: var(--text); }
+.sdm-turn-content h4 { font-size: 14px; margin: 12px 0 6px; color: var(--text-2); }
+.sdm-turn-content strong { color: var(--text); }
+
+/* Synthesis */
+.sdm-synthesis {
+  margin-top: 28px; padding: 24px;
+  background: linear-gradient(135deg, rgba(124,58,237,0.05), rgba(37,99,235,0.05));
+  border: 2px solid var(--accent); border-radius: var(--radius-lg);
+}
+.sdm-synthesis-content { font-size: 14px; line-height: 1.7; color: var(--text); }
+.sdm-synthesis-content h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+.sdm-synthesis-content h4 { font-size: 15px; margin: 16px 0 8px; color: var(--text); }
+.sdm-synthesis-content p { margin-bottom: 10px; }
+
+/* History */
+.sdm-history { margin-top: 32px; max-width: 600px; margin-left: auto; margin-right: auto; }
+.sdm-history-title { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-3); margin-bottom: 10px; }
+.sdm-history-item {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 10px 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer; margin-bottom: 6px; text-align: left;
+  transition: border-color 0.15s; font-family: inherit;
+}
+.sdm-history-item:hover { border-color: var(--primary); }
+.sdm-history-thesis { font-size: 13px; color: var(--text); flex: 1; }
+.sdm-history-date { font-size: 11px; color: var(--text-3); margin-left: 12px; flex-shrink: 0; }

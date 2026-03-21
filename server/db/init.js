@@ -46,5 +46,16 @@ export function initDb(dbPath) {
   // Add podcast_json column for cached podcast scripts
   try { db.exec('ALTER TABLE cases ADD COLUMN podcast_json TEXT'); } catch {}
 
+  // Dialectic sessions table for SDM engine
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS dialectic_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      thesis TEXT NOT NULL,
+      rounds_json TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
   return db;
 }

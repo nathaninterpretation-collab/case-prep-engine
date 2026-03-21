@@ -8,6 +8,7 @@ import analyzeRoutes from './routes/analyze.js';
 import casesRoutes from './routes/cases.js';
 import quizRoutes from './routes/quiz.js';
 import podcastRoutes from './routes/podcast.js';
+import dialecticRoutes from './routes/dialectic.js';
 import authRoutes from './routes/auth.js';
 import { requireAuth } from './middleware/auth.js';
 
@@ -40,6 +41,7 @@ app.use('/api/analyze', requireAuth, analyzeRoutes(db));
 app.use('/api/cases', requireAuth, casesRoutes(db));
 app.use('/api/quiz', requireAuth, quizRoutes(db));
 app.use('/api/podcast', requireAuth, podcastRoutes(db));
+app.use('/api/dialectic', requireAuth, dialecticRoutes(db));
 
 // SPA fallback
 app.get('*', (req, res) => {

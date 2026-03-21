@@ -126,6 +126,7 @@
         <button class="tab-btn" data-tab="hazards">HAZARDS</button>
         <button class="tab-btn" data-tab="quiz">QUIZ</button>
         <button class="tab-btn" data-tab="podcast">PODCAST</button>
+        <button class="tab-btn sdm-tab-btn" data-tab="dialectic">SDM</button>
       </nav>
 
       <!-- Tab content panels -->
@@ -329,6 +330,52 @@
               </div>
             </div>
             <div id="podcast-script-body" class="podcast-script-body"></div>
+          </div>
+        </div>
+
+        <!-- Tab 8: Synthetic Dialectical Mediation -->
+        <div id="tab-dialectic" class="tab-panel hidden">
+          <div id="sdm-setup" class="sdm-setup">
+            <div class="sdm-hero">
+              <div class="sdm-hero-icon">⚖</div>
+              <h3>Synthetic Dialectical Mediation</h3>
+              <p class="sdm-subtitle">Submit a thesis, subject, or idea. Five archetypal thinkers will engage in genuine dialectical exchange — no sycophancy, no easy answers. The mediator distributes your position across speakers so truth emerges from collision, not confirmation.</p>
+              <div class="sdm-speakers-preview" id="sdm-speakers-preview"></div>
+              <div class="sdm-input-area">
+                <textarea id="sdm-thesis-input" class="sdm-thesis-input" placeholder="Enter your thesis, subject matter, or proposition..." rows="4"></textarea>
+                <div class="sdm-controls">
+                  <div class="sdm-rounds-selector">
+                    <label>Rounds:</label>
+                    <button class="sdm-round-btn active" data-rounds="5">5</button>
+                    <button class="sdm-round-btn" data-rounds="10">10</button>
+                    <button class="sdm-round-btn" data-rounds="30">30</button>
+                  </div>
+                  <button id="sdm-start-btn" class="btn-primary btn-xl sdm-start-btn">Begin Dialectic</button>
+                </div>
+              </div>
+              <div id="sdm-history" class="sdm-history"></div>
+            </div>
+          </div>
+
+          <div id="sdm-loading" class="sdm-loading hidden">
+            <div class="spinner"></div>
+            <p>The mediator is orchestrating the dialectic...</p>
+            <p class="sdm-loading-note">Round <span id="sdm-loading-round">1</span> — this may take a few minutes depending on the number of rounds.</p>
+          </div>
+
+          <div id="sdm-viewer" class="sdm-viewer hidden">
+            <div class="sdm-viewer-header">
+              <div class="sdm-thesis-display">
+                <span class="sdm-thesis-label">Thesis:</span>
+                <span id="sdm-thesis-text" class="sdm-thesis-text"></span>
+              </div>
+              <div class="sdm-viewer-actions">
+                <button id="sdm-synthesize-btn" class="btn-primary sdm-synthesize-btn">Draw Conclusion</button>
+                <button id="sdm-new-btn" class="btn-secondary">New Session</button>
+              </div>
+            </div>
+            <div id="sdm-conversation" class="sdm-conversation"></div>
+            <div id="sdm-synthesis" class="sdm-synthesis hidden"></div>
           </div>
         </div>
 
