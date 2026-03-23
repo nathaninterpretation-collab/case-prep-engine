@@ -100,6 +100,43 @@ export default function authRoutes(db) {
     }
   });
 
+  // Change password (requires current password verification)
+  router.post('/change-password', requireAuth, async (req, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Current and new password required' });
+      if (newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
+
+      const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      if (user.password_hash === 'GUEST') return res.status(400).json({ error: 'Guest accounts cannot change password' });
+
+      const valid = await bcrypt.compare(currentPassword, user.password_hash);
+      if (!valid) return res.status(401).json({ error: 'Current password is incorrect' });
+
+      const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+      db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").run(newHash, req.user.id);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('Change password error:', err);
+      res.status(500).json({ error: 'Failed to change password' });
+    }
+  });
+
+  // Save user preferences (dark mode, language, etc.)
+  router.put('/preferences', requireAuth, (req, res) => {
+    const { preferences } = req.body;
+    db.prepare("UPDATE users SET preferences = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(JSON.stringify(preferences), req.user.id);
+    res.json({ ok: true });
+  });
+
+  // Get user preferences
+  router.get('/preferences', requireAuth, (req, res) => {
+    const user = db.prepare('SELECT preferences FROM users WHERE id = ?').get(req.user.id);
+    res.json(user?.preferences ? JSON.parse(user.preferences) : {});
+  });
+
   // Clear API key
   router.delete('/api-key', requireAuth, (req, res) => {
     db.prepare('UPDATE users SET api_key_encrypted = NULL, api_key_iv = NULL, api_key_tag = NULL, updated_at = datetime(\'now\') WHERE id = ?')
