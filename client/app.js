@@ -285,8 +285,11 @@ function bindEvents() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Authentication failed');
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
       setToken(data.token);
       state.user = data.user;
       showApp();
@@ -311,8 +314,11 @@ function bindEvents() {
   $('#guest-btn').addEventListener('click', async () => {
     try {
       const res = await fetch('/api/auth/guest', { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Guest login failed');
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
       setToken(data.token);
       state.user = data.user;
       state.isGuest = true;
@@ -342,7 +348,7 @@ function bindEvents() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       $('#forgot-status').textContent = data.message || 'If an account exists, a reset link has been sent.';
       $('#forgot-status').style.color = 'var(--success)';
     } catch {
@@ -616,6 +622,7 @@ function newCase() {
 async function loadCase(id) {
   try {
     const res = await apiFetch(`/api/cases/${id}`);
+    if (!res.ok) throw new Error('Failed to load case');
     const data = await res.json();
     state.currentCaseId = data.id;
     state.currentProfile = data.profile;
@@ -2450,6 +2457,7 @@ async function startMCQ() {
 
   try {
     const res = await apiFetch(`/api/quiz/mcq/${state.currentCaseId}`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to generate quiz');
     const data = await res.json();
     if (!data.questions || data.questions.length === 0) {
       alert('No quiz questions available.');
@@ -2829,6 +2837,7 @@ async function startSight() {
 
   try {
     const res = await apiFetch(`/api/quiz/sight/${state.currentCaseId}`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to generate sight passage');
     const data = await res.json();
     state.sightData = data;
     $('#sight-passage').textContent = data.passage || 'No passage available.';
@@ -3077,7 +3086,7 @@ function showPodcastSetup() {
   // Try fetching cached from server
   if (state.currentCaseId) {
     apiFetch(`/api/podcast/script/${state.currentCaseId}`)
-      .then(res => res.json())
+      .then(res => { if (!res.ok) throw new Error('Not found'); return res.json(); })
       .then(data => {
         if (data.script) {
           state.currentAnalysis.podcastScript = data;
@@ -3116,9 +3125,11 @@ async function generatePodcast(regenerate = false) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ regenerate })
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Generation failed');
+    }
     const data = await res.json();
-
-    if (!res.ok) throw new Error(data.error || 'Generation failed');
     if (!data.script) throw new Error('No script returned');
 
     // Cache in state
@@ -3509,6 +3520,7 @@ async function loadQuizHistory() {
   if (!state.currentCaseId) return;
   try {
     const res = await apiFetch(`/api/quiz/scores/${state.currentCaseId}`);
+    if (!res.ok) throw new Error('Failed to load scores');
     const scores = await res.json();
     renderQuizHistory(scores);
   } catch {}
@@ -3602,8 +3614,11 @@ async function changePassword() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ currentPassword: current, newPassword: newPw })
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Password change failed');
+    }
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
     status.textContent = 'Password changed successfully';
     status.style.color = 'var(--success)';
     $('#settings-current-pw').value = '';
