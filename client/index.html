@@ -59,10 +59,20 @@
         <span class="subtitle">Case Prep Engine</span>
       </div>
       <button id="new-case-btn" class="btn-primary">+ New Case</button>
+      <!-- Tag filter for sidebar -->
+      <div id="sidebar-tag-filter" class="sidebar-tag-filter hidden">
+        <select id="sidebar-tag-select" class="filter-select filter-select-sm">
+          <option value="">All tags</option>
+        </select>
+      </div>
       <div id="case-list" class="case-list"></div>
       <div class="sidebar-footer">
         <div id="user-email" class="user-email"></div>
-        <button id="logout-btn" class="btn-ghost btn-small">Logout</button>
+        <div class="sidebar-footer-btns">
+          <button id="settings-btn" class="btn-ghost btn-small" title="Account Settings">&#9881;</button>
+          <button id="dark-mode-toggle" class="btn-ghost btn-small" title="Toggle Dark Mode">&#9790;</button>
+          <button id="logout-btn" class="btn-ghost btn-small">Logout</button>
+        </div>
       </div>
     </aside>
 
@@ -83,6 +93,8 @@
           <input type="text" id="case-name-input" placeholder="Case name..." class="case-name-input" style="display:none;">
           <button id="analyze-btn" class="btn-primary" disabled style="display:none;">Analyze</button>
           <button id="export-pdf-btn" class="btn-small" style="display:none;" title="Export all tabs as PDF">Export PDF</button>
+          <button id="export-anki-btn" class="btn-small" style="display:none;" title="Export terminology as Anki deck">Export Anki</button>
+          <button id="export-docx-btn" class="btn-small" style="display:none;" title="Export as formatted document">Export Doc</button>
           <button id="api-key-btn" class="icon-btn" title="API Key Settings">&#128273;</button>
         </div>
       </header>
@@ -111,6 +123,72 @@
         </div>
       </div>
 
+      <!-- Account Settings Modal -->
+      <div id="settings-modal" class="modal-overlay hidden">
+        <div class="modal modal-lg">
+          <div class="modal-header">
+            <h3>Account Settings</h3>
+            <button id="settings-close" class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="settings-section">
+              <h4>Appearance</h4>
+              <div class="settings-row">
+                <label>Theme</label>
+                <select id="pref-theme" class="filter-select">
+                  <option value="system">System Default</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </div>
+            </div>
+            <div class="settings-section">
+              <h4>Target Language</h4>
+              <div class="settings-row">
+                <label>Primary language pair</label>
+                <select id="pref-language" class="filter-select">
+                  <option value="zh">English ↔ Chinese (Mandarin/Cantonese)</option>
+                  <option value="es">English ↔ Spanish</option>
+                  <option value="ko">English ↔ Korean</option>
+                  <option value="vi">English ↔ Vietnamese</option>
+                  <option value="tl">English ↔ Tagalog</option>
+                  <option value="ar">English ↔ Arabic</option>
+                  <option value="ru">English ↔ Russian</option>
+                  <option value="pt">English ↔ Portuguese</option>
+                  <option value="fr">English ↔ French</option>
+                  <option value="ja">English ↔ Japanese</option>
+                </select>
+              </div>
+            </div>
+            <div class="settings-section" id="settings-password-section">
+              <h4>Change Password</h4>
+              <div class="settings-row">
+                <input type="password" id="settings-current-pw" placeholder="Current password" class="modal-input">
+              </div>
+              <div class="settings-row">
+                <input type="password" id="settings-new-pw" placeholder="New password (min 8 chars)" class="modal-input">
+              </div>
+              <div id="settings-pw-status" class="auth-error"></div>
+              <button id="settings-change-pw-btn" class="btn-primary btn-small">Change Password</button>
+            </div>
+            <div class="settings-section">
+              <h4>Keyboard Shortcuts</h4>
+              <div class="shortcuts-grid">
+                <div class="shortcut-item"><kbd>1</kbd>-<kbd>7</kbd> Switch tabs</div>
+                <div class="shortcut-item"><kbd>Esc</kbd> Close modals</div>
+                <div class="shortcut-item"><kbd>N</kbd> New case</div>
+                <div class="shortcut-item"><kbd>D</kbd> Toggle dark mode</div>
+                <div class="shortcut-item"><kbd>/</kbd> Search terms</div>
+                <div class="shortcut-item"><kbd>E</kbd> Export PDF</div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button id="settings-save" class="btn-primary">Save Preferences</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Progress bar -->
       <div id="progress-bar" class="progress-bar hidden">
         <div class="progress-fill"></div>
@@ -126,6 +204,7 @@
         <button class="tab-btn" data-tab="hazards">HAZARDS</button>
         <button class="tab-btn" data-tab="quiz">QUIZ</button>
         <button class="tab-btn" data-tab="podcast">PODCAST</button>
+        <button class="tab-btn" data-tab="notes">NOTES</button>
       </nav>
 
       <!-- Tab content panels -->
@@ -138,7 +217,7 @@
             <span class="upload-icon">&#128203;</span>
             <h2>Drop case documents here</h2>
             <p>or click to browse</p>
-            <span class="formats">PDF, DOCX, TXT, images &mdash; up to 5 files</span>
+            <span class="formats">PDF, DOCX, TXT, images &mdash; up to 20 files</span>
           </div>
           <div id="upload-file-list" class="upload-file-list"></div>
           <div id="upload-actions" class="upload-actions" style="display:none;">
@@ -155,6 +234,8 @@
               <option value="">All domains</option>
             </select>
             <button id="term-export" class="btn-small">Export TSV</button>
+            <button id="term-flashcard-btn" class="btn-small">Flashcards</button>
+            <button id="term-audio-btn" class="btn-small" title="Play pronunciation for selected term">&#128266; Audio</button>
           </div>
           <div id="term-table-wrapper" class="table-wrapper">
             <table id="term-table" class="data-table term-table">
@@ -178,6 +259,34 @@
               <table class="data-table term-table">
                 <tbody id="term-dismissed-tbody"></tbody>
               </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Flashcard overlay -->
+        <div id="flashcard-overlay" class="flashcard-overlay hidden">
+          <div class="flashcard-container">
+            <div class="flashcard-header">
+              <h3>Flashcards</h3>
+              <div class="flashcard-progress">
+                <span id="fc-progress">1/30</span>
+                <span id="fc-known-count" class="fc-badge fc-known">0 known</span>
+                <span id="fc-learning-count" class="fc-badge fc-learning">0 learning</span>
+              </div>
+              <button id="fc-close" class="modal-close">&times;</button>
+            </div>
+            <div id="flashcard-card" class="flashcard-card">
+              <div class="flashcard-front" id="fc-front"></div>
+              <div class="flashcard-back hidden" id="fc-back"></div>
+            </div>
+            <div class="flashcard-actions">
+              <button id="fc-flip" class="btn-primary btn-large">Flip</button>
+              <div class="flashcard-rate hidden" id="fc-rate-btns">
+                <button class="btn-secondary btn-large fc-rate" data-rating="again">Again</button>
+                <button class="btn-secondary btn-large fc-rate" data-rating="hard">Hard</button>
+                <button class="btn-primary btn-large fc-rate" data-rating="good">Good</button>
+                <button class="btn-primary btn-large fc-rate" data-rating="easy">Easy</button>
+              </div>
             </div>
           </div>
         </div>
@@ -231,7 +340,12 @@
                 <div class="mode-desc">Practice with realistic passages</div>
               </div>
             </div>
-            <div id="quiz-history" class="quiz-history"></div>
+            <!-- Quiz history dashboard -->
+            <div id="quiz-history" class="quiz-history">
+              <h4>Performance History</h4>
+              <div id="quiz-history-chart" class="quiz-history-chart"></div>
+              <div id="quiz-history-list" class="quiz-history-list"></div>
+            </div>
           </div>
 
           <div id="quiz-active" class="quiz-active hidden">
@@ -299,13 +413,13 @@
         <div id="tab-podcast" class="tab-panel hidden">
           <div id="podcast-setup" class="podcast-setup">
             <div class="podcast-hero">
-              <span class="podcast-hero-icon">🎙️</span>
+              <span class="podcast-hero-icon">&#127897;</span>
               <h3>Podcast Deep Dive</h3>
               <p class="podcast-subtitle">Generate a NotebookLM-style two-host podcast script that walks through your case preparation in an engaging, conversational format.</p>
               <div class="podcast-specs">
-                <span class="podcast-spec">🕐 ~30 min script</span>
-                <span class="podcast-spec">💬 Two hosts</span>
-                <span class="podcast-spec">🀄 Chinese terms inline</span>
+                <span class="podcast-spec">&#128336; ~30 min script</span>
+                <span class="podcast-spec">&#128172; Two hosts</span>
+                <span class="podcast-spec">&#127744; Bilingual terms inline</span>
               </div>
               <button id="podcast-generate-btn" class="btn-primary btn-xl podcast-generate-btn">Generate Podcast Script</button>
               <p class="podcast-note">Uses a separate API call — not included in the main analysis.</p>
@@ -322,13 +436,35 @@
                 <span id="podcast-runtime" class="podcast-meta-badge"></span>
               </div>
               <div class="podcast-actions">
-                <button id="podcast-copy-btn" class="btn-small podcast-action-btn" title="Copy script for Natural Reader">📋 Copy Script</button>
-                <button id="podcast-play-btn" class="btn-small podcast-action-btn" title="Play with browser voices (fallback)">▶ Play</button>
-                <button id="podcast-stop-btn" class="btn-small podcast-action-btn hidden" title="Stop playback">⏹ Stop</button>
+                <button id="podcast-copy-btn" class="btn-small podcast-action-btn" title="Copy script for Natural Reader">&#128203; Copy Script</button>
+                <button id="podcast-play-btn" class="btn-small podcast-action-btn" title="Play with browser voices (fallback)">&#9654; Play</button>
+                <button id="podcast-stop-btn" class="btn-small podcast-action-btn hidden" title="Stop playback">&#9209; Stop</button>
                 <button id="podcast-regenerate-btn" class="btn-small">Regenerate</button>
               </div>
             </div>
             <div id="podcast-script-body" class="podcast-script-body"></div>
+          </div>
+        </div>
+
+        <!-- Tab 8: Notes -->
+        <div id="tab-notes" class="tab-panel hidden">
+          <div class="notes-container">
+            <div class="notes-header">
+              <h3>Case Notes</h3>
+              <div class="notes-meta">
+                <div class="notes-tags-section">
+                  <label>Tags:</label>
+                  <div id="notes-tags" class="notes-tags"></div>
+                  <input type="text" id="notes-tag-input" class="tag-input" placeholder="Add tag...">
+                </div>
+                <div class="notes-hearing-section">
+                  <label>Hearing Date:</label>
+                  <input type="date" id="notes-hearing-date" class="modal-input hearing-input">
+                </div>
+              </div>
+              <span id="notes-save-status" class="notes-save-status"></span>
+            </div>
+            <textarea id="notes-textarea" class="notes-textarea" placeholder="Add your preparation notes here...&#10;&#10;You can note down:&#10;- Key interpreter strategies&#10;- Difficult terms to review&#10;- Questions for the attorney&#10;- Personal reminders"></textarea>
           </div>
         </div>
 

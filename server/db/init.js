@@ -45,6 +45,16 @@ export function initDb(dbPath) {
   try { db.exec('ALTER TABLE quiz_scores ADD COLUMN user_id TEXT REFERENCES users(id)'); } catch {}
   // Add podcast_json column for cached podcast scripts
   try { db.exec('ALTER TABLE cases ADD COLUMN podcast_json TEXT'); } catch {}
+  // Add notes column for case annotations
+  try { db.exec('ALTER TABLE cases ADD COLUMN notes TEXT'); } catch {}
+  // Add tags column for case organization
+  try { db.exec('ALTER TABLE cases ADD COLUMN tags TEXT'); } catch {}
+  // Add sort_order column for drag-to-reorder
+  try { db.exec('ALTER TABLE cases ADD COLUMN sort_order INTEGER DEFAULT 0'); } catch {}
+  // Add hearing_date column for calendar integration
+  try { db.exec('ALTER TABLE cases ADD COLUMN hearing_date TEXT'); } catch {}
+  // Add preferences column to users for dark mode, language, etc.
+  try { db.exec('ALTER TABLE users ADD COLUMN preferences TEXT'); } catch {}
 
   return db;
 }

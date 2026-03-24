@@ -40,7 +40,7 @@ export default function analyzeRoutes(db) {
   const router = Router();
 
   // Upload and analyze documents
-  router.post('/', upload.array('documents', 5), async (req, res) => {
+  router.post('/', upload.array('documents', 20), async (req, res) => {
     try {
       if (!req.files || req.files.length === 0) {
         return res.status(400).json({ error: 'No documents uploaded' });

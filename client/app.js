@@ -9,7 +9,14 @@ const state = {
   activeTab: 'terminology',
   mode: 'upload', // 'upload' | 'analysis'
   user: null,
-  token: null
+  token: null,
+  preferences: { theme: 'system', language: 'zh' },
+  currentNotes: '',
+  currentTags: [],
+  currentHearingDate: '',
+  flashcardState: null,
+  sidebarTagFilter: '',
+  analysisRetryCount: 0
 };
 
 // ===== DOM REFS =====
@@ -68,9 +75,67 @@ function updateKeyStatus() {
   }
 }
 
+// ===== THEME / PREFERENCES =====
+function applyTheme(theme) {
+  const html = document.documentElement;
+  html.removeAttribute('data-theme');
+  if (theme === 'dark') html.setAttribute('data-theme', 'dark');
+  else if (theme === 'light') html.setAttribute('data-theme', 'light');
+  // 'system' = no attribute, falls through to @media query
+}
+
+function cycleTheme() {
+  const order = ['system', 'light', 'dark'];
+  const idx = order.indexOf(state.preferences.theme);
+  state.preferences.theme = order[(idx + 1) % 3];
+  applyTheme(state.preferences.theme);
+  savePreferences();
+  const icons = { system: '\u{263D}', light: '\u{2600}', dark: '\u{1F319}' };
+  const btn = $('#dark-mode-toggle');
+  if (btn) btn.textContent = icons[state.preferences.theme] || '\u{263D}';
+}
+
+async function loadPreferences() {
+  try {
+    const res = await apiFetch('/api/auth/preferences');
+    if (res.ok) {
+      const prefs = await res.json();
+      if (prefs && typeof prefs === 'object') {
+        Object.assign(state.preferences, prefs);
+      }
+    }
+  } catch {}
+  applyTheme(state.preferences.theme);
+  // Also try localStorage fallback
+  const local = localStorage.getItem('cpe_preferences');
+  if (local) {
+    try { Object.assign(state.preferences, JSON.parse(local)); } catch {}
+    applyTheme(state.preferences.theme);
+  }
+}
+
+function savePreferences() {
+  localStorage.setItem('cpe_preferences', JSON.stringify(state.preferences));
+  apiFetch('/api/auth/preferences', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ preferences: state.preferences })
+  }).catch(() => {});
+}
+
+// ===== OFFLINE CACHE =====
+function cacheCase(id, data) {
+  try { localStorage.setItem(`cpe_case_${id}`, JSON.stringify(data)); } catch {}
+}
+
+function getCachedCase(id) {
+  try { return JSON.parse(localStorage.getItem(`cpe_case_${id}`)); } catch { return null; }
+}
+
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
+  loadPreferences();
 
   const token = getToken();
   if (token) {
@@ -82,6 +147,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         state.token = token;
         showApp();
         loadCases();
+        loadPreferences();
         return;
       }
     } catch {}
@@ -297,14 +363,134 @@ function bindEvents() {
   $('#sight-done-btn').addEventListener('click', showSightAssessment);
   $('#sight-next-btn').addEventListener('click', startSight);
   $('#sight-submit-btn').addEventListener('click', submitSightAssessment);
+
+  // ===== NEW FEATURE BINDINGS =====
+
+  // Dark mode toggle
+  $('#dark-mode-toggle')?.addEventListener('click', cycleTheme);
+
+  // Flashcard button
+  $('#term-flashcard-btn')?.addEventListener('click', openFlashcards);
+  $('#fc-close')?.addEventListener('click', closeFlashcards);
+  $('#fc-flip')?.addEventListener('click', flipFlashcard);
+  $('#flashcard-overlay')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeFlashcards();
+  });
+  $$('.fc-rate').forEach(btn => {
+    btn.addEventListener('click', () => rateFlashcard(btn.dataset.rating));
+  });
+
+  // Audio pronunciation
+  $('#term-audio-btn')?.addEventListener('click', playTermAudio);
+
+  // Anki export
+  $('#export-anki-btn')?.addEventListener('click', exportAnki);
+
+  // Doc export
+  $('#export-docx-btn')?.addEventListener('click', exportDoc);
+
+  // Notes tab auto-save
+  let notesTimer = null;
+  $('#notes-textarea')?.addEventListener('input', () => {
+    state.currentNotes = $('#notes-textarea').value;
+    if (notesTimer) clearTimeout(notesTimer);
+    $('#notes-save-status').textContent = 'Saving...';
+    notesTimer = setTimeout(saveNotes, 1000);
+  });
+
+  // Tag input
+  $('#notes-tag-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const tag = e.target.value.trim();
+      if (tag && !state.currentTags.includes(tag)) {
+        state.currentTags.push(tag);
+        renderNoteTags();
+        saveTags();
+      }
+      e.target.value = '';
+    }
+  });
+
+  // Hearing date
+  $('#notes-hearing-date')?.addEventListener('change', (e) => {
+    state.currentHearingDate = e.target.value;
+    saveHearingDate();
+  });
+
+  // Sidebar tag filter
+  $('#sidebar-tag-select')?.addEventListener('change', (e) => {
+    state.sidebarTagFilter = e.target.value;
+    renderCaseList();
+  });
+
+  // Settings modal
+  $('#settings-btn')?.addEventListener('click', openSettings);
+  $('#settings-close')?.addEventListener('click', () => $('#settings-modal').classList.add('hidden'));
+  $('#settings-modal')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) $('#settings-modal').classList.add('hidden');
+  });
+  $('#settings-save')?.addEventListener('click', saveSettingsModal);
+  $('#settings-change-pw-btn')?.addEventListener('click', changePassword);
+
+  // ===== KEYBOARD SHORTCUTS =====
+  document.addEventListener('keydown', (e) => {
+    // Skip if user is typing in an input/textarea
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+      if (e.key === 'Escape') document.activeElement.blur();
+      return;
+    }
+
+    // Tab switching 1-8
+    if (e.key >= '1' && e.key <= '8' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const tabs = ['terminology', 'context', 'legal-theory', 'industry', 'hazards', 'quiz', 'podcast', 'notes'];
+      const idx = parseInt(e.key) - 1;
+      if (idx < tabs.length && state.mode === 'analysis') {
+        e.preventDefault();
+        switchTab(tabs[idx]);
+      }
+      return;
+    }
+
+    // Escape — close modals
+    if (e.key === 'Escape') {
+      $$('.modal-overlay:not(.hidden)').forEach(m => m.classList.add('hidden'));
+      if (!$('#flashcard-overlay').classList.contains('hidden')) closeFlashcards();
+      return;
+    }
+
+    // N = new case
+    if (e.key === 'n' || e.key === 'N') { newCase(); return; }
+
+    // D = toggle dark mode
+    if (e.key === 'd' || e.key === 'D') { cycleTheme(); return; }
+
+    // / = focus search
+    if (e.key === '/') {
+      e.preventDefault();
+      const search = $('#term-search');
+      if (search) search.focus();
+      return;
+    }
+
+    // E = export PDF
+    if ((e.key === 'e' || e.key === 'E') && state.mode === 'analysis') {
+      exportAllTabsPDF();
+      return;
+    }
+  });
+
+  // ===== DRAG TO REORDER SIDEBAR =====
+  setupSidebarDrag();
 }
 
 // ===== FILE HANDLING =====
 function handleFiles(files) {
   if (!files.length) return;
   const total = state.uploadedFiles.length + files.length;
-  if (total > 5) {
-    alert('Maximum 5 documents. Remove some first.');
+  if (total > 20) {
+    alert('Maximum 20 documents. Remove some first.');
     return;
   }
   state.uploadedFiles.push(...files);
@@ -365,16 +551,44 @@ async function loadCases() {
 
 function renderCaseList() {
   const list = $('#case-list');
-  list.innerHTML = state.cases.map(c => `
-    <div class="case-item ${c.id === state.currentCaseId ? 'active' : ''}" data-id="${c.id}">
-      <div class="case-item-name">${esc(c.name)}</div>
+  let filtered = state.cases;
+
+  // Apply tag filter
+  if (state.sidebarTagFilter) {
+    filtered = filtered.filter(c => (c.tags || []).includes(state.sidebarTagFilter));
+  }
+
+  // Update tag filter dropdown
+  const allTags = [...new Set(state.cases.flatMap(c => c.tags || []))];
+  const tagSelect = $('#sidebar-tag-select');
+  if (tagSelect) {
+    const current = tagSelect.value;
+    tagSelect.innerHTML = '<option value="">All tags</option>' +
+      allTags.map(t => `<option value="${esc(t)}" ${t === current ? 'selected' : ''}>${esc(t)}</option>`).join('');
+  }
+  const tagFilter = $('#sidebar-tag-filter');
+  if (tagFilter) tagFilter.classList.toggle('hidden', allTags.length === 0);
+
+  list.innerHTML = filtered.map(c => {
+    const tags = (c.tags || []).map(t => `<span class="case-tag">${esc(t)}</span>`).join('');
+    const hearingBadge = c.hearing_date ? (() => {
+      const days = Math.ceil((new Date(c.hearing_date) - new Date()) / 86400000);
+      if (days < 0) return '';
+      return `<span class="case-hearing-badge">${days === 0 ? 'Today' : days + 'd'}</span>`;
+    })() : '';
+    return `
+    <div class="case-item ${c.id === state.currentCaseId ? 'active' : ''}" data-id="${c.id}" draggable="true">
+      <div class="case-item-name">${esc(c.name)} ${hearingBadge}</div>
       <div class="case-item-meta">${c.case_type || ''} &middot; ${new Date(c.created_at).toLocaleDateString()}</div>
-    </div>
-  `).join('');
+      ${tags ? `<div class="case-item-tags">${tags}</div>` : ''}
+    </div>`;
+  }).join('');
 
   list.querySelectorAll('.case-item').forEach(el => {
     el.addEventListener('click', () => loadCase(el.dataset.id));
   });
+
+  setupSidebarDrag();
 }
 
 function newCase() {
@@ -398,12 +612,31 @@ async function loadCase(id) {
     state.currentCaseId = data.id;
     state.currentProfile = data.profile;
     state.currentAnalysis = data.analysis;
+    state.currentNotes = data.notes || '';
+    state.currentTags = data.tags || [];
+    state.currentHearingDate = data.hearing_date || '';
     state.mode = 'analysis';
     $('#case-title').textContent = data.name;
+    // Cache for offline
+    cacheCase(id, data);
     renderCaseList();
     showAnalysisMode();
   } catch (e) {
     console.error('Failed to load case:', e);
+    // Try offline cache
+    const cached = getCachedCase(id);
+    if (cached) {
+      state.currentCaseId = cached.id;
+      state.currentProfile = cached.profile;
+      state.currentAnalysis = cached.analysis;
+      state.currentNotes = cached.notes || '';
+      state.currentTags = cached.tags || [];
+      state.currentHearingDate = cached.hearing_date || '';
+      state.mode = 'analysis';
+      $('#case-title').textContent = (cached.name || 'Cached') + ' (offline)';
+      renderCaseList();
+      showAnalysisMode();
+    }
   }
 }
 
@@ -416,6 +649,8 @@ function showUploadMode() {
   $('#case-name-input').style.display = 'none';
   $('#analyze-btn').style.display = 'none';
   $('#export-pdf-btn').style.display = 'none';
+  if ($('#export-anki-btn')) $('#export-anki-btn').style.display = 'none';
+  if ($('#export-docx-btn')) $('#export-docx-btn').style.display = 'none';
 }
 
 function showAnalysisMode() {
@@ -426,6 +661,8 @@ function showAnalysisMode() {
   $('#analyze-btn').style.display = 'block';
   $('#analyze-btn').disabled = true;
   $('#export-pdf-btn').style.display = 'inline-block';
+  if ($('#export-anki-btn')) $('#export-anki-btn').style.display = 'inline-block';
+  if ($('#export-docx-btn')) $('#export-docx-btn').style.display = 'inline-block';
   switchTab(state.activeTab);
 }
 
@@ -485,6 +722,7 @@ async function runAnalysis() {
     const data = await res.json();
     clearInterval(progressTimer);
     progressTimer = null;
+    state.analysisRetryCount = 0;
     setProgress(100, 'Ready!');
 
     state.currentCaseId = data.caseId;
@@ -500,6 +738,14 @@ async function runAnalysis() {
     setTimeout(() => $('#progress-bar').classList.add('hidden'), 1200);
   } catch (err) {
     if (progressTimer) clearInterval(progressTimer);
+    state.analysisRetryCount++;
+    if (state.analysisRetryCount <= 3 && (err.message.includes('fetch') || err.message.includes('network') || err.message.includes('Failed'))) {
+      const delay = Math.pow(2, state.analysisRetryCount) * 1000;
+      setProgress(0, `Network error — retrying in ${delay/1000}s (attempt ${state.analysisRetryCount}/3)...`);
+      setTimeout(() => runAnalysis(), delay);
+      return;
+    }
+    state.analysisRetryCount = 0;
     setProgress(0, 'Error: ' + err.message);
     $('.progress-fill').style.background = 'linear-gradient(90deg, #ef4444, #f87171)';
     setTimeout(() => {
@@ -525,7 +771,7 @@ function switchTab(tab) {
   $$('.tab-panel').forEach(p => p.classList.add('hidden'));
 
   const panel = $(`#tab-${tab}`);
-  if (panel && state.currentAnalysis) {
+  if (panel && (state.currentAnalysis || tab === 'notes')) {
     panel.classList.remove('hidden');
     renderTab(tab);
   }
@@ -542,6 +788,7 @@ function renderTab(tab) {
     case 'hazards': renderHazards(); break;
     case 'quiz': showQuizSetup(); break;
     case 'podcast': showPodcastSetup(); break;
+    case 'notes': renderNotes(); break;
   }
 }
 
@@ -2179,6 +2426,7 @@ function showQuizSetup() {
   $('#quiz-active').classList.add('hidden');
   $('#quiz-results').classList.add('hidden');
   $('#sight-active').classList.add('hidden');
+  loadQuizHistory();
 }
 
 async function startMCQ() {
@@ -2196,6 +2444,7 @@ async function startMCQ() {
       showQuizSetup();
       return;
     }
+    QUIZ_TIME_MS = getAdaptiveTimer();
     state.quizState = {
       questions: data.questions,
       current: 0,
@@ -2218,7 +2467,7 @@ async function startMCQ() {
   }
 }
 
-const QUIZ_TIME_MS = 6000;
+let QUIZ_TIME_MS = 6000;
 const CONTEXT_QUIZ_TIME_MS = 60000; // 60 seconds for context quiz
 
 function showQuestion() {
@@ -2428,6 +2677,9 @@ function finishQuiz() {
   </div>`;
 
   $('#quiz-breakdown').innerHTML = breakdownHtml;
+
+  // Save adaptive performance
+  saveQuizPerformance(accPct);
 
   // Save
   apiFetch('/api/quiz/score', {
@@ -3012,6 +3264,388 @@ function stopPodcastScript() {
   podcastSpeechIdx = 0;
   $('#podcast-play-btn').classList.remove('hidden');
   $('#podcast-stop-btn').classList.add('hidden');
+}
+
+// ===== TAB 8: NOTES =====
+function renderNotes() {
+  const textarea = $('#notes-textarea');
+  if (textarea) textarea.value = state.currentNotes || '';
+  renderNoteTags();
+  const dateInput = $('#notes-hearing-date');
+  if (dateInput) dateInput.value = state.currentHearingDate || '';
+  $('#notes-save-status').textContent = '';
+}
+
+function renderNoteTags() {
+  const container = $('#notes-tags');
+  if (!container) return;
+  container.innerHTML = (state.currentTags || []).map((t, i) => `
+    <span class="notes-tag">${esc(t)}<button class="tag-remove" data-idx="${i}">&times;</button></span>
+  `).join('');
+  container.querySelectorAll('.tag-remove').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.currentTags.splice(parseInt(btn.dataset.idx), 1);
+      renderNoteTags();
+      saveTags();
+    });
+  });
+}
+
+async function saveNotes() {
+  if (!state.currentCaseId) return;
+  try {
+    await apiFetch(`/api/cases/${state.currentCaseId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: state.currentNotes })
+    });
+    $('#notes-save-status').textContent = 'Saved';
+    setTimeout(() => { if ($('#notes-save-status')) $('#notes-save-status').textContent = ''; }, 2000);
+  } catch {
+    $('#notes-save-status').textContent = 'Save failed';
+  }
+}
+
+async function saveTags() {
+  if (!state.currentCaseId) return;
+  try {
+    await apiFetch(`/api/cases/${state.currentCaseId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: state.currentTags })
+    });
+    loadCases(); // Refresh sidebar tags
+  } catch {}
+}
+
+async function saveHearingDate() {
+  if (!state.currentCaseId) return;
+  try {
+    await apiFetch(`/api/cases/${state.currentCaseId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hearing_date: state.currentHearingDate })
+    });
+    loadCases();
+  } catch {}
+}
+
+// ===== FLASHCARD MODE =====
+function openFlashcards() {
+  const terms = state.currentAnalysis?.terminology || [];
+  if (!terms.length) { alert('No terminology available.'); return; }
+
+  // SRS-like: shuffle, track ratings
+  const cards = terms.filter(t => (t.difficulty ?? 3) > 0).map(t => ({
+    en: t.en, zh: t.zh_simplified || t.zh_traditional || '', pinyin: t.pinyin || '',
+    context: t.context_note || '', interval: 1, rating: null
+  }));
+  shuffle(cards);
+
+  state.flashcardState = { cards, current: 0, known: 0, learning: 0, flipped: false };
+  $('#flashcard-overlay').classList.remove('hidden');
+  showFlashcard();
+}
+
+function closeFlashcards() {
+  $('#flashcard-overlay').classList.add('hidden');
+  state.flashcardState = null;
+}
+
+function showFlashcard() {
+  const fs = state.flashcardState;
+  if (!fs || fs.current >= fs.cards.length) {
+    // Done
+    $('#fc-front').innerHTML = `<div style="text-align:center"><h3>Session Complete!</h3><p>${fs.known} known, ${fs.learning} need review</p></div>`;
+    $('#fc-back').classList.add('hidden');
+    $('#fc-flip').style.display = 'none';
+    $('#fc-rate-btns').classList.add('hidden');
+    return;
+  }
+
+  const card = fs.cards[fs.current];
+  fs.flipped = false;
+  $('#fc-progress').textContent = `${fs.current + 1}/${fs.cards.length}`;
+  $('#fc-known-count').textContent = `${fs.known} known`;
+  $('#fc-learning-count').textContent = `${fs.learning} learning`;
+  $('#fc-front').textContent = card.en;
+  $('#fc-front').classList.remove('hidden');
+  $('#fc-back').classList.add('hidden');
+  $('#fc-flip').style.display = '';
+  $('#fc-rate-btns').classList.add('hidden');
+}
+
+function flipFlashcard() {
+  const fs = state.flashcardState;
+  if (!fs || fs.flipped) return;
+  fs.flipped = true;
+  const card = fs.cards[fs.current];
+  $('#fc-back').innerHTML = `
+    <div class="fc-zh">${esc(card.zh)}</div>
+    <div class="fc-pinyin">${esc(card.pinyin)}</div>
+    ${card.context ? `<div class="fc-context">${esc(card.context)}</div>` : ''}
+  `;
+  $('#fc-front').classList.add('hidden');
+  $('#fc-back').classList.remove('hidden');
+  $('#fc-flip').style.display = 'none';
+  $('#fc-rate-btns').classList.remove('hidden');
+}
+
+function rateFlashcard(rating) {
+  const fs = state.flashcardState;
+  if (!fs) return;
+
+  if (rating === 'again') {
+    // Put card back 3-5 cards later
+    const card = fs.cards[fs.current];
+    const insertAt = Math.min(fs.current + 3 + Math.floor(Math.random() * 3), fs.cards.length);
+    fs.cards.splice(fs.current, 1);
+    fs.cards.splice(insertAt, 0, card);
+    fs.learning++;
+  } else if (rating === 'hard') {
+    // Put back later
+    const card = fs.cards[fs.current];
+    const insertAt = Math.min(fs.current + 5 + Math.floor(Math.random() * 5), fs.cards.length);
+    fs.cards.splice(fs.current, 1);
+    fs.cards.splice(insertAt, 0, card);
+    fs.learning++;
+  } else {
+    // good or easy — move on
+    fs.known++;
+    fs.current++;
+  }
+
+  showFlashcard();
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ===== AUDIO PRONUNCIATION =====
+function playTermAudio() {
+  if (!window.speechSynthesis) { alert('Speech synthesis not supported in this browser.'); return; }
+  // Find expanded term
+  const terms = state.currentAnalysis?.terminology || [];
+  const expanded = [...expandedTerms];
+  if (!expanded.length) { alert('Click a term row to expand it, then click Audio.'); return; }
+  const term = terms[expanded[0]];
+  if (!term) return;
+  const text = term.zh_simplified || term.zh_traditional || '';
+  if (!text) return;
+
+  const utter = new SpeechSynthesisUtterance(text);
+  const voices = speechSynthesis.getVoices();
+  const zhVoice = voices.find(v => v.lang.startsWith('zh')) || voices[0];
+  if (zhVoice) utter.voice = zhVoice;
+  utter.rate = 0.8;
+  speechSynthesis.speak(utter);
+}
+
+// ===== EXPORT: ANKI =====
+function exportAnki() {
+  const terms = state.currentAnalysis?.terminology || [];
+  if (!terms.length) return;
+  const lines = terms.map(t => {
+    const front = t.en || '';
+    const back = `${t.zh_simplified || ''} / ${t.zh_traditional || ''}<br>${t.pinyin || ''}<br><i>${t.context_note || ''}</i>`;
+    return `${front}\t${back}`;
+  });
+  downloadText(lines.join('\n'), 'anki-import.txt');
+}
+
+// ===== EXPORT: DOC (HTML) =====
+function exportDoc() {
+  // Reuse the PDF export HTML but without auto-print, download as .html
+  const a = state.currentAnalysis;
+  const p = state.currentProfile;
+  if (!a) return;
+  const caseName = $('#case-title').textContent || 'Case Prep';
+  const terms = a.terminology || [];
+  const termRows = terms.map(t =>
+    `<tr><td>${esc(t.en)}</td><td>${esc(t.zh_simplified)}</td><td>${esc(t.zh_traditional)}</td><td>${esc(t.pinyin)}</td><td>${esc(t.context_note)}</td><td>${t.difficulty || ''}</td></tr>`
+  ).join('');
+  const nodes = a.context_nodes || [];
+  const contextRows = nodes.map(n =>
+    `<tr><td><strong>${esc(n.label)}</strong></td><td>${esc(n.type)}</td><td>${esc(n.detail)}</td><td>${esc(n.significance)}</td></tr>`
+  ).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${esc(caseName)}</title>
+<style>body{font-family:'Segoe UI',sans-serif;font-size:12px;color:#1a1a1a;line-height:1.5;max-width:900px;margin:0 auto;padding:20px}
+h1{font-size:20px;border-bottom:3px solid #4f46e5;padding-bottom:6px}h2{font-size:16px;color:#4f46e5;margin-top:28px}
+table{width:100%;border-collapse:collapse;margin:6px 0 12px;font-size:11px}th,td{border:1px solid #d1d5db;padding:4px 6px;text-align:left}th{background:#f1f5f9;font-weight:600}</style></head>
+<body><h1>${esc(caseName)} — Case Preparation Materials</h1>
+<h2>Terminology (${terms.length})</h2><table><thead><tr><th>English</th><th>Simplified</th><th>Traditional</th><th>Pinyin</th><th>Context</th><th>Diff</th></tr></thead><tbody>${termRows}</tbody></table>
+<h2>Context Nodes (${nodes.length})</h2><table><thead><tr><th>Label</th><th>Type</th><th>Detail</th><th>Significance</th></tr></thead><tbody>${contextRows}</tbody></table>
+${state.currentNotes ? `<h2>Notes</h2><pre style="white-space:pre-wrap">${esc(state.currentNotes)}</pre>` : ''}
+</body></html>`;
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `${caseName.replace(/[^a-zA-Z0-9]/g, '_')}.html`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+// ===== QUIZ HISTORY DASHBOARD =====
+async function loadQuizHistory() {
+  if (!state.currentCaseId) return;
+  try {
+    const res = await apiFetch(`/api/quiz/scores/${state.currentCaseId}`);
+    const scores = await res.json();
+    renderQuizHistory(scores);
+  } catch {}
+}
+
+function renderQuizHistory(scores) {
+  const chart = $('#quiz-history-chart');
+  const list = $('#quiz-history-list');
+  if (!chart || !list) return;
+
+  if (!scores || !scores.length) {
+    chart.innerHTML = '<p style="color:var(--text-3);font-size:13px">No quiz history yet.</p>';
+    list.innerHTML = '';
+    return;
+  }
+
+  // Bar chart — last 20 scores
+  const recent = scores.slice(0, 20).reverse();
+  const maxScore = Math.max(...recent.map(s => s.score || 0), 1);
+  chart.innerHTML = recent.map(s => {
+    const pct = Math.round(((s.score || 0) / maxScore) * 100);
+    const details = s.details ? JSON.parse(s.details) : {};
+    return `<div class="quiz-history-bar" style="height:${Math.max(pct, 5)}%" title="${s.mode}: ${s.score} pts, ${details.accuracy || 0}% acc">
+      <span class="bar-label">${details.accuracy || Math.round(s.score)}%</span>
+    </div>`;
+  }).join('');
+
+  // List
+  list.innerHTML = scores.slice(0, 10).map(s => {
+    const details = s.details ? JSON.parse(s.details) : {};
+    const date = new Date(s.created_at).toLocaleDateString();
+    return `<div class="breakdown-item">
+      <span class="q-term">${esc(s.mode)}</span>
+      <span>${date}</span>
+      <span class="q-correct">${s.score} pts</span>
+      <span>${details.accuracy || 0}% acc</span>
+    </div>`;
+  }).join('');
+}
+
+// ===== ADAPTIVE QUIZ DIFFICULTY =====
+function getAdaptiveTimer() {
+  if (!state.currentCaseId) return 6000;
+  const key = `cpe_quiz_perf_${state.currentCaseId}`;
+  try {
+    const perf = JSON.parse(localStorage.getItem(key) || '{}');
+    if (perf.accuracy > 80) return 4000;
+    if (perf.accuracy < 40) return 8000;
+  } catch {}
+  return 6000;
+}
+
+function saveQuizPerformance(accuracy) {
+  if (!state.currentCaseId) return;
+  const key = `cpe_quiz_perf_${state.currentCaseId}`;
+  localStorage.setItem(key, JSON.stringify({ accuracy, timestamp: Date.now() }));
+}
+
+// ===== SETTINGS MODAL =====
+function openSettings() {
+  $('#settings-modal').classList.remove('hidden');
+  $('#pref-theme').value = state.preferences.theme || 'system';
+  $('#pref-language').value = state.preferences.language || 'zh';
+  // Hide password section for guests
+  const pwSection = $('#settings-password-section');
+  if (pwSection) pwSection.style.display = state.isGuest ? 'none' : '';
+  $('#settings-pw-status').textContent = '';
+  $('#settings-current-pw').value = '';
+  $('#settings-new-pw').value = '';
+}
+
+function saveSettingsModal() {
+  state.preferences.theme = $('#pref-theme').value;
+  state.preferences.language = $('#pref-language').value;
+  applyTheme(state.preferences.theme);
+  savePreferences();
+  $('#settings-modal').classList.add('hidden');
+}
+
+async function changePassword() {
+  const current = $('#settings-current-pw').value;
+  const newPw = $('#settings-new-pw').value;
+  const status = $('#settings-pw-status');
+
+  if (!current || !newPw) { status.textContent = 'Both fields required'; return; }
+  if (newPw.length < 8) { status.textContent = 'New password must be 8+ characters'; return; }
+
+  try {
+    const res = await apiFetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: current, newPassword: newPw })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    status.textContent = 'Password changed successfully';
+    status.style.color = 'var(--success)';
+    $('#settings-current-pw').value = '';
+    $('#settings-new-pw').value = '';
+  } catch (err) {
+    status.textContent = err.message;
+    status.style.color = 'var(--danger)';
+  }
+}
+
+// ===== SIDEBAR DRAG TO REORDER =====
+function setupSidebarDrag() {
+  const list = $('#case-list');
+  if (!list) return;
+  let draggedId = null;
+
+  list.querySelectorAll('.case-item').forEach(el => {
+    el.addEventListener('dragstart', (e) => {
+      draggedId = el.dataset.id;
+      el.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    el.addEventListener('dragend', () => {
+      el.classList.remove('dragging');
+      $$('.case-item.drag-over').forEach(x => x.classList.remove('drag-over'));
+    });
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      el.classList.add('drag-over');
+    });
+    el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.classList.remove('drag-over');
+      if (!draggedId || draggedId === el.dataset.id) return;
+
+      // Reorder in state
+      const fromIdx = state.cases.findIndex(c => c.id === draggedId);
+      const toIdx = state.cases.findIndex(c => c.id === el.dataset.id);
+      if (fromIdx < 0 || toIdx < 0) return;
+      const [item] = state.cases.splice(fromIdx, 1);
+      state.cases.splice(toIdx, 0, item);
+      renderCaseList();
+
+      // Save to server
+      const order = state.cases.map((c, i) => ({ id: c.id, sort_order: i }));
+      apiFetch('/api/cases/reorder', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order })
+      }).catch(() => {});
+    });
+  });
 }
 
 // ===== UTILITIES =====
