@@ -41,6 +41,17 @@ app.use('/api/cases', requireAuth, casesRoutes(db));
 app.use('/api/quiz', requireAuth, quizRoutes(db));
 app.use('/api/podcast', requireAuth, podcastRoutes(db));
 
+// API error handler — always return JSON for /api routes
+app.use('/api', (err, req, res, next) => {
+  console.error('API error:', err);
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+});
+
+// API 404 handler — return JSON, not HTML
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'API endpoint not found' });
+});
+
 // SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(join(__dirname, '..', 'client', 'index.html'));

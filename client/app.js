@@ -42,6 +42,13 @@ function apiFetch(url, options = {}) {
       showAuthScreen();
       throw new Error('Session expired');
     }
+    // Guard against non-JSON responses (e.g. Render cold-start HTML pages)
+    const ct = res.headers.get('content-type') || '';
+    if (!res.ok && !ct.includes('application/json')) {
+      throw new Error(res.status === 502 || res.status === 503
+        ? 'Server is starting up — please try again in a few seconds'
+        : `Server error (${res.status})`);
+    }
     return res;
   });
 }
@@ -542,6 +549,7 @@ function renderFileList() {
 async function loadCases() {
   try {
     const res = await apiFetch('/api/cases');
+    if (!res.ok) throw new Error('Failed to load cases');
     state.cases = await res.json();
     renderCaseList();
   } catch (e) {
@@ -715,8 +723,12 @@ async function runAnalysis() {
     });
 
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Analysis failed');
+      let errMsg = 'Analysis failed';
+      try {
+        const err = await res.json();
+        errMsg = err.error || errMsg;
+      } catch { /* response wasn't JSON */ }
+      throw new Error(errMsg);
     }
 
     const data = await res.json();
