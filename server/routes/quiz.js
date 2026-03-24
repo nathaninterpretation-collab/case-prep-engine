@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { generateQuiz, generateSightPassage } from '../services/quizGenerator.js';
+import { generateQuiz, generateSightPassage, gradeSightTranslation } from '../services/quizGenerator.js';
 import { decryptApiKey } from '../services/crypto.js';
 
 function getUserApiKey(db, userId) {
@@ -44,6 +44,27 @@ export default function quizRoutes(db) {
       res.json(passage);
     } catch (err) {
       console.error('Sight passage error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Grade sight translation attempt
+  router.post('/sight-grade/:caseId', async (req, res) => {
+    try {
+      const row = db.prepare('SELECT profile_json FROM cases WHERE id = ? AND user_id = ?').get(req.params.caseId, req.user.id);
+      if (!row) return res.status(404).json({ error: 'Case not found' });
+
+      const apiKey = getUserApiKey(db, req.user.id);
+      if (!apiKey) return res.status(400).json({ error: 'No API key set.' });
+
+      const { passage, key_terms, userTranslation } = req.body;
+      if (!userTranslation || !userTranslation.trim()) return res.status(400).json({ error: 'No translation provided' });
+
+      const profile = JSON.parse(row.profile_json);
+      const grading = await gradeSightTranslation(passage, key_terms || [], userTranslation, profile, apiKey);
+      res.json(grading);
+    } catch (err) {
+      console.error('Sight grading error:', err);
       res.status(500).json({ error: err.message });
     }
   });

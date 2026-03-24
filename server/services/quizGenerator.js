@@ -99,6 +99,82 @@ Respond in JSON:
 }
 
 /**
+ * Grade a sight translation attempt.
+ * Compares user's translation against the source passage + key terms.
+ * Uses Claude for semantic comparison, plus fuzzy matching for term hits.
+ */
+export async function gradeSightTranslation(passage, keyTerms, userTranslation, caseProfile, apiKey) {
+  // Step 1: Fuzzy match key terms in user's translation
+  const termResults = keyTerms.map(term => {
+    const userLower = userTranslation.toLowerCase();
+    const zhSimp = (term.zh_simplified || '').toLowerCase();
+    const zhTrad = (term.zh_traditional || '').toLowerCase();
+
+    // Exact match
+    if (zhSimp && userTranslation.includes(term.zh_simplified)) return { ...term, match: 'exact', found: true };
+    if (zhTrad && userTranslation.includes(term.zh_traditional)) return { ...term, match: 'exact', found: true };
+
+    // Fuzzy match: check if significant portion of characters appear
+    const fuzzyMatch = (target) => {
+      if (!target || target.length < 2) return false;
+      const chars = [...target];
+      const hits = chars.filter(c => userTranslation.includes(c)).length;
+      return hits / chars.length >= 0.6;
+    };
+    if (fuzzyMatch(term.zh_simplified) || fuzzyMatch(term.zh_traditional)) return { ...term, match: 'partial', found: true };
+
+    // Check for transliteration / phonetic match in pinyin-ish text
+    const enLower = (term.en || '').toLowerCase();
+    if (enLower.length > 3 && userLower.includes(enLower)) return { ...term, match: 'english_used', found: true };
+
+    return { ...term, match: 'missed', found: false };
+  });
+
+  // Step 2: Claude semantic grading
+  const response = await getClient(apiKey).messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 2000,
+    messages: [{
+      role: 'user',
+      content: `You are an interpreter exam grader. Compare this sight translation attempt against the source passage.
+
+SOURCE PASSAGE (English, ${caseProfile?.case_type || 'legal'} context):
+"${passage}"
+
+INTERPRETER'S TRANSLATION (into Chinese):
+"${userTranslation}"
+
+KEY TERMS that should appear in the translation:
+${keyTerms.map(t => `- "${t.en}" → "${t.zh_simplified}" / "${t.zh_traditional}"`).join('\n')}
+
+Grade the translation and respond in JSON:
+{
+  "overall_score": <0-100>,
+  "accuracy": <0-100 — does the meaning match?>,
+  "completeness": <0-100 — were all parts of the passage translated?>,
+  "terminology_score": <0-100 — were key terms rendered correctly?>,
+  "fluency": <0-100 — does it read naturally in Chinese?>,
+  "model_translation": "<your reference translation of the full passage into Chinese>",
+  "feedback": "<2-3 sentences of specific, constructive feedback>",
+  "term_notes": [
+    {"en": "term", "verdict": "correct|partial|missed|wrong_term", "note": "<brief note on how user rendered it>"}
+  ]
+}`
+    }]
+  });
+
+  const text = response.content[0].text;
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    return { overall_score: 0, feedback: 'Failed to grade translation.', term_results: termResults };
+  }
+
+  const grading = JSON.parse(jsonMatch[0]);
+  grading.term_results = termResults;
+  return grading;
+}
+
+/**
  * Pick N unique distractor values that are all different from each other
  * AND different from the correct answer.
  */

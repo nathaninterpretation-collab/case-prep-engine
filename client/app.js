@@ -16,7 +16,9 @@ const state = {
   currentHearingDate: '',
   flashcardState: null,
   sidebarTagFilter: '',
-  analysisRetryCount: 0
+  analysisRetryCount: 0,
+  sightData: null,
+  sightRating: 3
 };
 
 // ===== DOM REFS =====
@@ -373,9 +375,10 @@ function bindEvents() {
     else startMCQ();
   });
   $('#quiz-back-btn').addEventListener('click', showQuizSetup);
-  $('#sight-done-btn').addEventListener('click', showSightAssessment);
+  $('#sight-done-btn').addEventListener('click', showSightTranslationInput);
   $('#sight-next-btn').addEventListener('click', startSight);
-  $('#sight-submit-btn').addEventListener('click', submitSightAssessment);
+  $('#sight-record-btn').addEventListener('click', toggleSightRecording);
+  $('#sight-submit-btn').addEventListener('click', submitSightTranslation);
 
   // ===== NEW FEATURE BINDINGS =====
 
@@ -2826,6 +2829,8 @@ function generateContextQuestions(nodes, count = 20) {
 }
 
 // ===== SIGHT TRANSLATION =====
+let sightRecognition = null;
+
 async function startSight() {
   if (!state.currentCaseId) return;
   $('#quiz-setup').classList.add('hidden');
@@ -2833,7 +2838,10 @@ async function startSight() {
   $('#quiz-results').classList.add('hidden');
   $('#sight-active').classList.remove('hidden');
   $('#sight-result').classList.add('hidden');
-  $('#sight-assessment').classList.add('hidden');
+  $('#sight-input').classList.add('hidden');
+  $('#sight-grading').classList.add('hidden');
+  $('#sight-done-btn').disabled = false;
+  $('#sight-translation-input').value = '';
 
   try {
     const res = await apiFetch(`/api/quiz/sight/${state.currentCaseId}`, { method: 'POST' });
@@ -2847,71 +2855,244 @@ async function startSight() {
   }
 }
 
-function showSightAssessment() {
-  const keyTerms = state.sightData?.key_terms || [];
-  if (!keyTerms.length) { alert('No key terms available for assessment.'); return; }
-
-  $('#sight-assessment').classList.remove('hidden');
+function showSightTranslationInput() {
+  $('#sight-input').classList.remove('hidden');
   $('#sight-done-btn').disabled = true;
+  $('#sight-submit-btn').disabled = true;
 
-  // Build checklist
-  $('#sight-checklist').innerHTML = keyTerms.map((t, i) => `
-    <label class="sight-check-item" data-idx="${i}">
-      <input type="checkbox" value="${i}">
-      <span class="sight-term-en">${esc(t.en)}</span>
-      <span class="sight-term-arrow">&rarr;</span>
-      <span class="sight-term-zh">${esc(t.zh_simplified || t.zh_traditional || '')}</span>
-    </label>
-  `).join('');
-
-  // Build confidence rating (1-5)
-  $('#sight-rating').innerHTML = [1,2,3,4,5].map(n =>
-    `<button class="sight-star" data-rating="${n}">${n}</button>`
-  ).join('');
-  state.sightRating = 3;
-  $$('.sight-star').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.sightRating = parseInt(btn.dataset.rating);
-      $$('.sight-star').forEach(b => b.classList.toggle('active', parseInt(b.dataset.rating) <= state.sightRating));
-    });
+  // Enable submit when there's text
+  const textarea = $('#sight-translation-input');
+  textarea.addEventListener('input', () => {
+    $('#sight-submit-btn').disabled = !textarea.value.trim();
   });
-  // Default highlight
-  $$('.sight-star').forEach(b => b.classList.toggle('active', parseInt(b.dataset.rating) <= 3));
 
-  // Toggle check items
-  $$('.sight-check-item').forEach(item => {
-    item.addEventListener('click', () => item.classList.toggle('checked'));
-  });
+  // Check for speech recognition support
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    $('#sight-record-btn').style.display = 'none';
+    $('#sight-input .sight-input-or').textContent = 'Type your translation:';
+  }
 }
 
-function submitSightAssessment() {
+function toggleSightRecording() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return;
+
+  if (sightRecognition) {
+    // Stop recording
+    sightRecognition.stop();
+    return;
+  }
+
+  sightRecognition = new SpeechRecognition();
+  sightRecognition.lang = 'zh-CN';
+  sightRecognition.continuous = true;
+  sightRecognition.interimResults = true;
+
+  const textarea = $('#sight-translation-input');
+  const existing = textarea.value;
+  let finalTranscript = existing;
+
+  $('#sight-recording-status').classList.remove('hidden');
+  $('#sight-record-btn').classList.add('recording');
+  $('#sight-record-btn').innerHTML = '<span class="mic-icon">&#9724;</span> Stop Recording';
+
+  sightRecognition.onresult = (event) => {
+    let interim = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        finalTranscript += transcript;
+      } else {
+        interim += transcript;
+      }
+    }
+    textarea.value = finalTranscript + interim;
+    $('#sight-submit-btn').disabled = !textarea.value.trim();
+  };
+
+  sightRecognition.onerror = (event) => {
+    console.error('Speech recognition error:', event.error);
+    if (event.error === 'not-allowed') {
+      $('#sight-recording-text').textContent = 'Microphone access denied';
+    }
+    stopSightRecording();
+  };
+
+  sightRecognition.onend = () => {
+    // Finalize what we have
+    textarea.value = finalTranscript;
+    stopSightRecording();
+  };
+
+  sightRecognition.start();
+}
+
+function stopSightRecording() {
+  if (sightRecognition) {
+    try { sightRecognition.stop(); } catch {}
+    sightRecognition = null;
+  }
+  $('#sight-recording-status').classList.add('hidden');
+  $('#sight-record-btn').classList.remove('recording');
+  $('#sight-record-btn').innerHTML = '<span class="mic-icon">&#127908;</span> Record Translation';
+}
+
+async function submitSightTranslation() {
+  const userTranslation = $('#sight-translation-input').value.trim();
+  if (!userTranslation) return;
+
+  // Show grading spinner
+  $('#sight-input').classList.add('hidden');
+  $('#sight-grading').classList.remove('hidden');
+  stopSightRecording();
+
+  try {
+    const res = await apiFetch(`/api/quiz/sight-grade/${state.currentCaseId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        passage: state.sightData.passage,
+        key_terms: state.sightData.key_terms,
+        userTranslation
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Grading failed');
+    }
+    const grading = await res.json();
+
+    $('#sight-grading').classList.add('hidden');
+    $('#sight-result').classList.remove('hidden');
+    renderSightResults(grading, userTranslation);
+
+    // Save score
+    apiFetch('/api/quiz/score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        caseId: state.currentCaseId,
+        mode: 'sight',
+        score: grading.overall_score || 0,
+        total: (state.sightData.key_terms || []).length,
+        details: {
+          accuracy: grading.accuracy,
+          completeness: grading.completeness,
+          terminology_score: grading.terminology_score,
+          fluency: grading.fluency,
+          termsTotal: (state.sightData.key_terms || []).length
+        }
+      })
+    }).catch(console.error);
+  } catch (err) {
+    console.error('Grading error:', err);
+    $('#sight-grading').classList.add('hidden');
+    $('#sight-input').classList.remove('hidden');
+    alert('Grading failed: ' + err.message);
+  }
+}
+
+function renderSightResults(grading, userTranslation) {
   const keyTerms = state.sightData?.key_terms || [];
-  const checked = $$('.sight-check-item input:checked').length;
-  const total = keyTerms.length;
-  const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+  const termNotes = grading.term_notes || [];
+  const termResults = grading.term_results || [];
 
-  $('#sight-assessment').classList.add('hidden');
-  $('#sight-result').classList.remove('hidden');
+  // Merge Claude's term_notes with fuzzy match term_results
+  const mergedTerms = keyTerms.map(t => {
+    const claudeNote = termNotes.find(n => n.en?.toLowerCase() === t.en?.toLowerCase());
+    const fuzzyResult = termResults.find(r => r.en?.toLowerCase() === t.en?.toLowerCase());
+    const verdict = claudeNote?.verdict || (fuzzyResult?.found ? fuzzyResult.match : 'missed');
+    return {
+      en: t.en,
+      zh: t.zh_simplified || t.zh_traditional || '',
+      verdict,
+      note: claudeNote?.note || ''
+    };
+  });
+
+  const termsCorrect = mergedTerms.filter(t => t.verdict === 'correct' || t.verdict === 'exact').length;
+  const termsPartial = mergedTerms.filter(t => t.verdict === 'partial').length;
+
+  function scoreColor(score) {
+    if (score >= 80) return 'var(--success)';
+    if (score >= 60) return '#f59e0b';
+    return 'var(--danger)';
+  }
+
+  function verdictBadge(v) {
+    const map = {
+      correct: ['Correct', 'var(--success)', 'var(--success-light)'],
+      exact: ['Correct', 'var(--success)', 'var(--success-light)'],
+      partial: ['Partial', '#f59e0b', '#fef3c7'],
+      wrong_term: ['Wrong Term', 'var(--danger)', '#fee2e2'],
+      english_used: ['English Used', '#6366f1', '#e0e7ff'],
+      missed: ['Missed', 'var(--danger)', '#fee2e2']
+    };
+    const [label, color, bg] = map[v] || map.missed;
+    return `<span class="term-verdict" style="color:${color};background:${bg}">${label}</span>`;
+  }
+
+  const overallScore = grading.overall_score ?? 0;
+
   $('#sight-score-display').innerHTML = `
-    <div class="results-grid" style="max-width:400px;margin:0 auto;">
-      <div class="result-card accuracy"><div class="result-value">${pct}%</div><div class="result-label">Terms Correct</div></div>
-      <div class="result-card streak"><div class="result-value">${checked}/${total}</div><div class="result-label">Terms Rendered</div></div>
-      <div class="result-card speed"><div class="result-value">${state.sightRating}/5</div><div class="result-label">Confidence</div></div>
-    </div>
-  `;
+    <h3 style="text-align:center;margin-bottom:20px;">Translation Grading</h3>
 
-  // Save score
-  apiFetch('/api/quiz/score', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      caseId: state.currentCaseId,
-      mode: 'sight',
-      score: pct,
-      total: total,
-      details: { termsCorrect: checked, termsTotal: total, confidence: state.sightRating }
-    })
-  }).catch(console.error);
+    <!-- Score cards -->
+    <div class="results-grid" style="max-width:550px;margin:0 auto 24px;">
+      <div class="result-card accuracy">
+        <div class="result-value" style="color:${scoreColor(overallScore)}">${overallScore}%</div>
+        <div class="result-label">Overall</div>
+      </div>
+      <div class="result-card streak">
+        <div class="result-value" style="color:${scoreColor(grading.accuracy || 0)}">${grading.accuracy || 0}%</div>
+        <div class="result-label">Accuracy</div>
+      </div>
+      <div class="result-card speed">
+        <div class="result-value" style="color:${scoreColor(grading.completeness || 0)}">${grading.completeness || 0}%</div>
+        <div class="result-label">Completeness</div>
+      </div>
+      <div class="result-card">
+        <div class="result-value" style="color:${scoreColor(grading.terminology_score || 0)}">${grading.terminology_score || 0}%</div>
+        <div class="result-label">Terminology</div>
+      </div>
+      <div class="result-card">
+        <div class="result-value" style="color:${scoreColor(grading.fluency || 0)}">${grading.fluency || 0}%</div>
+        <div class="result-label">Fluency</div>
+      </div>
+    </div>
+
+    <!-- Feedback -->
+    ${grading.feedback ? `<div class="sight-feedback"><strong>Feedback:</strong> ${esc(grading.feedback)}</div>` : ''}
+
+    <!-- Term-by-term breakdown -->
+    <h4 style="margin:20px 0 10px;font-size:14px;font-weight:700;">Key Term Results (${termsCorrect}/${mergedTerms.length} correct${termsPartial ? `, ${termsPartial} partial` : ''})</h4>
+    <div class="sight-term-results">
+      ${mergedTerms.map(t => `
+        <div class="sight-term-row ${t.verdict}">
+          <span class="sight-term-en">${esc(t.en)}</span>
+          <span class="sight-term-arrow">&rarr;</span>
+          <span class="sight-term-zh">${esc(t.zh)}</span>
+          ${verdictBadge(t.verdict)}
+          ${t.note ? `<span class="sight-term-note">${esc(t.note)}</span>` : ''}
+        </div>
+      `).join('')}
+    </div>
+
+    <!-- Model translation comparison -->
+    ${grading.model_translation ? `
+      <div class="sight-comparison">
+        <div class="sight-compare-col">
+          <h4>Your Translation</h4>
+          <p>${esc(userTranslation)}</p>
+        </div>
+        <div class="sight-compare-col model">
+          <h4>Reference Translation</h4>
+          <p>${esc(grading.model_translation)}</p>
+        </div>
+      </div>
+    ` : ''}
+  `;
 }
 
 // ===== EXPORT ALL TABS AS PDF =====

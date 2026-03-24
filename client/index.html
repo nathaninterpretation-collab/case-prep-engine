@@ -394,15 +394,34 @@
               <button id="sight-done-btn" class="btn-primary btn-large">I'm Done Reading</button>
               <button id="sight-next-btn" class="btn-secondary btn-large">Next Passage</button>
             </div>
-            <div id="sight-assessment" class="sight-assessment hidden">
-              <h4>Self-Assessment: Which terms did you render correctly?</h4>
-              <div id="sight-checklist" class="sight-checklist"></div>
-              <div class="sight-confidence">
-                <label>Confidence level:</label>
-                <div id="sight-rating" class="sight-rating"></div>
+
+            <!-- Translation Input -->
+            <div id="sight-input" class="sight-input hidden">
+              <h4>Provide your translation</h4>
+              <div class="sight-input-modes">
+                <button id="sight-record-btn" class="btn-primary btn-large sight-mic-btn">
+                  <span class="mic-icon">&#127908;</span> Record Translation
+                </button>
+                <span class="sight-input-or">or type below</span>
               </div>
-              <button id="sight-submit-btn" class="btn-primary btn-large">Submit Assessment</button>
+              <div id="sight-recording-status" class="sight-recording-status hidden">
+                <span class="recording-dot"></span>
+                <span id="sight-recording-text">Listening...</span>
+              </div>
+              <textarea id="sight-translation-input" class="sight-translation-textarea" rows="5"
+                placeholder="Speak or type your translation here..."></textarea>
+              <div class="sight-submit-row">
+                <button id="sight-submit-btn" class="btn-primary btn-large" disabled>Grade My Translation</button>
+              </div>
             </div>
+
+            <!-- Grading spinner -->
+            <div id="sight-grading" class="sight-grading hidden">
+              <div class="sight-grading-spinner"></div>
+              <p>Grading your translation...</p>
+            </div>
+
+            <!-- Results -->
             <div id="sight-result" class="sight-result hidden">
               <div id="sight-score-display"></div>
             </div>
