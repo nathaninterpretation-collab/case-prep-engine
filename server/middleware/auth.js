@@ -1,9 +1,13 @@
 import jwt from 'jsonwebtoken';
 
+const DEFAULT_USER = { id: 'default-user', email: 'local@cpe.local' };
+
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Authentication required' });
+    // Auth bypassed — use default user
+    req.user = DEFAULT_USER;
+    return next();
   }
 
   const token = header.slice(7);
@@ -12,6 +16,8 @@ export function requireAuth(req, res, next) {
     req.user = { id: payload.id, email: payload.email };
     next();
   } catch {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    // Token invalid — still allow through with default user
+    req.user = DEFAULT_USER;
+    next();
   }
 }

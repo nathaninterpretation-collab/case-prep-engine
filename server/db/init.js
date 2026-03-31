@@ -56,5 +56,11 @@ export function initDb(dbPath) {
   // Add preferences column to users for dark mode, language, etc.
   try { db.exec('ALTER TABLE users ADD COLUMN preferences TEXT'); } catch {}
 
+  // Ensure default local user exists (auth-bypass mode)
+  const defaultUser = db.prepare('SELECT id FROM users WHERE id = ?').get('default-user');
+  if (!defaultUser) {
+    db.prepare('INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)').run('default-user', 'local@cpe.local', 'BYPASS');
+  }
+
   return db;
 }
